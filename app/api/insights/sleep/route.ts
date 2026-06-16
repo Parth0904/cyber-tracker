@@ -19,11 +19,14 @@ export async function GET() {
       outputs[row.date] = 0;
     }
 
-    if (row.type === "finding") {
-      outputs[row.date] += row.total * 5;
-    } else {
-      outputs[row.date] += row.total;
-    }
+    if (row.type === "recon_session")
+  outputs[row.date] += row.total * 1;
+
+if (row.type === "target_tested")
+  outputs[row.date] += row.total * 2;
+
+if (row.type === "finding")
+  outputs[row.date] += row.total * 10;
   });
 
   const entries = db.prepare(`

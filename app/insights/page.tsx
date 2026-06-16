@@ -8,6 +8,9 @@ export default function InsightsPage() {
   const [sleepData, setSleepData] = useState<any>(null);
   const [noScreenData, setNoScreenData] = useState<any>(null);
   const [wakeTimeData, setWakeTimeData] = useState<any>(null);
+  const [readingData, setReadingData] = useState<any>(null);
+  const [learningData, setLearningData] = useState<any>(null);
+  const [bugStudyData, setBugStudyData] = useState<any>(null);
 
   // Fallback map matching data tiers to theme color indicators safely
   const confidenceColor: Record<string, string> = {
@@ -24,7 +27,7 @@ export default function InsightsPage() {
   };
 
   useEffect(() => {
-    fetch("/api/insights")
+    fetch("/api/insights/workout")
       .then((res) => res.json())
       .then(setData);
 
@@ -39,6 +42,18 @@ export default function InsightsPage() {
     fetch("/api/insights/wake-time")
       .then((res) => res.json())
       .then(setWakeTimeData);
+
+    fetch("/api/insights/reading-before-bed")
+      .then((res) => res.json())
+      .then(setReadingData);
+
+    fetch("/api/insights/learning")
+      .then((res) => res.json())
+      .then(setLearningData);
+
+    fetch("/api/insights/bug-study")
+      .then((res) => res.json())
+      .then(setBugStudyData);
   }, []);
 
   if (!data) {
@@ -107,10 +122,9 @@ export default function InsightsPage() {
                 </span>
               </div>
             </div>
-            
-            <div className={`text-xs px-2.5 py-1 rounded-md font-mono font-bold border ${
-              difference >= 0 ? "bg-emerald-500/10 text-emerald-400 border-emerald-500/20" : "bg-rose-500/10 text-rose-400 border-rose-500/20"
-            }`}>
+
+            <div className={`text-xs px-2.5 py-1 rounded-md font-mono font-bold border ${difference >= 0 ? "bg-emerald-500/10 text-emerald-400 border-emerald-500/20" : "bg-rose-500/10 text-rose-400 border-rose-500/20"
+              }`}>
               Net Shift: {difference >= 0 ? "+" : ""}{difference.toFixed(1)}
             </div>
           </div>
@@ -263,6 +277,243 @@ export default function InsightsPage() {
                 <div className="flex items-baseline justify-between mt-3">
                   <span className="text-2xl font-black font-mono text-slate-200">{wakeTimeData.late.average.toFixed(1)}</span>
                   <span className="text-xs text-slate-500 font-mono">{wakeTimeData.late.days}d pooled</span>
+                </div>
+              </div>
+            </div>
+          </div>
+        )}
+        {readingData && (
+          <div className="bg-slate-900/40 border border-slate-800/80 rounded-xl p-6 shadow-xl backdrop-blur-md space-y-4">
+            <div className="border-b border-slate-800/60 pb-3">
+              <h2 className="text-sm font-bold uppercase tracking-wider text-slate-400">
+                Reading Before Bed Correlation
+              </h2>
+
+              <div className="flex items-center gap-1.5 text-xs text-slate-500 font-mono mt-1">
+                <span>Confidence:</span>
+                <span
+                  className={`font-bold ${confidenceColor[
+                    getConfidence(
+                      readingData.none.days +
+                      readingData.medium.days +
+                      readingData.high.days
+                    )
+                    ] || "text-slate-400"
+                    }`}
+                >
+                  {getConfidence(
+                    readingData.none.days +
+                    readingData.medium.days +
+                    readingData.high.days
+                  )}
+                </span>
+              </div>
+            </div>
+
+            <div className="grid grid-cols-1 sm:grid-cols-3 gap-4">
+              <div className="bg-slate-950/40 border border-slate-800/40 rounded-lg p-4">
+                <h3 className="text-xs font-semibold text-slate-500 font-mono">
+                  0 Minutes
+                </h3>
+
+                <div className="flex items-baseline justify-between mt-3">
+                  <span className="text-2xl font-black font-mono text-slate-300">
+                    {readingData.none.average.toFixed(1)}
+                  </span>
+
+                  <span className="text-xs text-slate-500 font-mono">
+                    {readingData.none.days}d pooled
+                  </span>
+                </div>
+              </div>
+
+              <div className="bg-slate-950/40 border border-slate-800/40 rounded-lg p-4">
+                <h3 className="text-xs font-semibold text-cyan-400 font-mono">
+                  1 - 20 Minutes
+                </h3>
+
+                <div className="flex items-baseline justify-between mt-3">
+                  <span className="text-2xl font-black font-mono text-slate-200">
+                    {readingData.medium.average.toFixed(1)}
+                  </span>
+
+                  <span className="text-xs text-slate-500 font-mono">
+                    {readingData.medium.days}d pooled
+                  </span>
+                </div>
+              </div>
+
+              <div className="bg-slate-950/40 border border-slate-800/40 rounded-lg p-4">
+                <h3 className="text-xs font-semibold text-emerald-400 font-mono">
+                  20+ Minutes
+                </h3>
+
+                <div className="flex items-baseline justify-between mt-3">
+                  <span className="text-2xl font-black font-mono text-slate-200">
+                    {readingData.high.average.toFixed(1)}
+                  </span>
+
+                  <span className="text-xs text-slate-500 font-mono">
+                    {readingData.high.days}d pooled
+                  </span>
+                </div>
+              </div>
+            </div>
+          </div>
+        )}
+        {learningData && (
+          <div className="bg-slate-900/40 border border-slate-800/80 rounded-xl p-6 shadow-xl backdrop-blur-md space-y-4">
+            <div className="border-b border-slate-800/60 pb-3">
+              <h2 className="text-sm font-bold uppercase tracking-wider text-slate-400">
+                Learning Hours Correlation
+              </h2>
+
+              <div className="flex items-center gap-1.5 text-xs text-slate-500 font-mono mt-1">
+                <span>Confidence:</span>
+                <span
+                  className={`font-bold ${confidenceColor[
+                    getConfidence(
+                      learningData.low.days +
+                      learningData.medium.days +
+                      learningData.high.days
+                    )
+                    ] || "text-slate-400"
+                    }`}
+                >
+                  {getConfidence(
+                    learningData.low.days +
+                    learningData.medium.days +
+                    learningData.high.days
+                  )}
+                </span>
+              </div>
+            </div>
+
+            <div className="grid grid-cols-1 sm:grid-cols-3 gap-4">
+              <div className="bg-slate-950/40 border border-slate-800/40 rounded-lg p-4">
+                <h3 className="text-xs font-semibold text-rose-400 font-mono">
+                  Less than 1h
+                </h3>
+
+                <div className="flex items-baseline justify-between mt-3">
+                  <span className="text-2xl font-black font-mono text-slate-200">
+                    {learningData.low.average.toFixed(1)}
+                  </span>
+
+                  <span className="text-xs text-slate-500 font-mono">
+                    {learningData.low.days}d pooled
+                  </span>
+                </div>
+              </div>
+
+              <div className="bg-slate-950/40 border border-slate-800/40 rounded-lg p-4">
+                <h3 className="text-xs font-semibold text-cyan-400 font-mono">
+                  1h - 3h
+                </h3>
+
+                <div className="flex items-baseline justify-between mt-3">
+                  <span className="text-2xl font-black font-mono text-slate-200">
+                    {learningData.medium.average.toFixed(1)}
+                  </span>
+
+                  <span className="text-xs text-slate-500 font-mono">
+                    {learningData.medium.days}d pooled
+                  </span>
+                </div>
+              </div>
+
+              <div className="bg-slate-950/40 border border-slate-800/40 rounded-lg p-4">
+                <h3 className="text-xs font-semibold text-emerald-400 font-mono">
+                  3h+
+                </h3>
+
+                <div className="flex items-baseline justify-between mt-3">
+                  <span className="text-2xl font-black font-mono text-slate-200">
+                    {learningData.high.average.toFixed(1)}
+                  </span>
+
+                  <span className="text-xs text-slate-500 font-mono">
+                    {learningData.high.days}d pooled
+                  </span>
+                </div>
+              </div>
+            </div>
+          </div>
+        )}
+        {bugStudyData && (
+          <div className="bg-slate-900/40 border border-slate-800/80 rounded-xl p-6 shadow-xl backdrop-blur-md space-y-4">
+            <div className="border-b border-slate-800/60 pb-3">
+              <h2 className="text-sm font-bold uppercase tracking-wider text-slate-400">
+                Bug Report Study Correlation
+              </h2>
+
+              <div className="flex items-center gap-1.5 text-xs text-slate-500 font-mono mt-1">
+                <span>Confidence:</span>
+                <span
+                  className={`font-bold ${confidenceColor[
+                    getConfidence(
+                      bugStudyData.low.days +
+                      bugStudyData.medium.days +
+                      bugStudyData.high.days
+                    )
+                    ] || "text-slate-400"
+                    }`}
+                >
+                  {getConfidence(
+                    bugStudyData.low.days +
+                    bugStudyData.medium.days +
+                    bugStudyData.high.days
+                  )}
+                </span>
+              </div>
+            </div>
+
+            <div className="grid grid-cols-1 sm:grid-cols-3 gap-4">
+              <div className="bg-slate-950/40 border border-slate-800/40 rounded-lg p-4">
+                <h3 className="text-xs font-semibold text-rose-400 font-mono">
+                  0 Minutes
+                </h3>
+
+                <div className="flex items-baseline justify-between mt-3">
+                  <span className="text-2xl font-black font-mono text-slate-200">
+                    {bugStudyData.low.average.toFixed(1)}
+                  </span>
+
+                  <span className="text-xs text-slate-500 font-mono">
+                    {bugStudyData.low.days}d pooled
+                  </span>
+                </div>
+              </div>
+
+              <div className="bg-slate-950/40 border border-slate-800/40 rounded-lg p-4">
+                <h3 className="text-xs font-semibold text-cyan-400 font-mono">
+                  1 - 30 Minutes
+                </h3>
+
+                <div className="flex items-baseline justify-between mt-3">
+                  <span className="text-2xl font-black font-mono text-slate-200">
+                    {bugStudyData.medium.average.toFixed(1)}
+                  </span>
+
+                  <span className="text-xs text-slate-500 font-mono">
+                    {bugStudyData.medium.days}d pooled
+                  </span>
+                </div>
+              </div>
+
+              <div className="bg-slate-950/40 border border-slate-800/40 rounded-lg p-4">
+                <h3 className="text-xs font-semibold text-emerald-400 font-mono">
+                  30+ Minutes
+                </h3>
+
+                <div className="flex items-baseline justify-between mt-3">
+                  <span className="text-2xl font-black font-mono text-slate-200">
+                    {bugStudyData.high.average.toFixed(1)}
+                  </span>
+
+                  <span className="text-xs text-slate-500 font-mono">
+                    {bugStudyData.high.days}d pooled
+                  </span>
                 </div>
               </div>
             </div>

@@ -18,36 +18,50 @@ export async function GET() {
 }
 
 export async function POST(req: Request) {
-    const body = await req.json();
+  const body = await req.json();
 
-    const today = new Date().toISOString().split("T")[0];
+  const today =
+    new Date().toISOString().split("T")[0];
 
-    db.prepare(`
+  db.prepare(`
     INSERT OR REPLACE INTO daily_entries (
       date,
       sleep_hours,
       wake_time,
       workout,
-      reading_minutes,
-      screen_time,
-      focus_feeling,
-      day_feeling,
-      no_screen_hours,
-      energy
-    )
-    VALUES (?, ?, ?, ?, ?, ?, ?, ?, ?)
-  `).run(
-        today,
-        body.sleep_hours,
-        body.wake_time,
-        body.workout ? 1 : 0,
-        body.reading_minutes,
-        body.no_screen_hours,
-        body.screen_time,
-        body.focus_feeling,
-        body.day_feeling,
-        body.energy
-    );
 
-    return NextResponse.json({ success: true });
+      learning_hours,
+
+      reading_before_bed_minutes,
+      bug_report_study_minutes,
+
+      no_screen_hours,
+
+      focus_feeling,
+
+      notes
+    )
+    VALUES (?, ?, ?, ?, ?, ?, ?, ?, ?, ?)
+  `).run(
+    today,
+
+    body.sleep_hours,
+    body.wake_time,
+    body.workout ? 1 : 0,
+
+    body.learning_hours,
+
+    body.reading_before_bed_minutes,
+    body.bug_report_study_minutes,
+
+    body.no_screen_hours,
+
+    body.focus_feeling,
+
+    body.notes
+  );
+
+  return NextResponse.json({
+    success: true,
+  });
 }
