@@ -1,94 +1,132 @@
-import db from "@/lib/db";
-import { NextResponse } from "next/server";
+import { NextRequest, NextResponse } from "next/server";
 
-export async function GET() {
+import {
+  getEntries,
+  getTodayEntry,
+} from "@/lib/repositories/dailyEntries";
 
-  const totalRecon =
-    (db.prepare(`
-      SELECT COUNT(*) as total
-      FROM activities
-      WHERE type='recon_session'
-    `).get() as { total: number }).total;
+import {
+  getActivities,
+} from "@/lib/repositories/activities";
 
-  const totalTargets =
-    (db.prepare(`
-      SELECT COUNT(*) as total
-      FROM activities
-      WHERE type='target_tested'
-    `).get() as { total: number }).total;
+import {
+  generateSummary,
+  generateScoreTrend,
+  generateActivityDistribution,
+  generateHabitRanking,
+  generatePeriodReport,
+  generateMilestones,
+  generatePersonalRecords,
+  generateHeatmap,
+} from "@/lib/analytics";
 
-  const totalFindings =
-    (db.prepare(`
-      SELECT COUNT(*) as total
-      FROM activities
-      WHERE type='finding'
-    `).get() as { total: number }).total;
+import { buildStatistics } from "@/lib/analytics/statistics";
 
-  const avgSleep =
-    (db.prepare(`
-      SELECT AVG(sleep_hours) as avg
-      FROM daily_entries
-    `).get() as { avg: number | null }).avg ?? 0;
+import { generateInsights } from "@/lib/insights";
 
-  const avgLearning =
-    (db.prepare(`
-      SELECT AVG(learning_hours) as avg
-      FROM daily_entries
-    `).get() as { avg: number | null }).avg ?? 0;
+import {
+  DailyEntry,
+} from "@/lib/types";
 
-  const avgReadingBeforeBed =
-    (db.prepare(`
-      SELECT AVG(reading_before_bed_minutes) as avg
-      FROM daily_entries
-    `).get() as { avg: number | null }).avg ?? 0;
+import {
+  TimeRange,
+} from "@/lib/types/analytics";
 
-  const avgNoScreenHours =
-    (db.prepare(`
-      SELECT AVG(no_screen_hours) as avg
-      FROM daily_entries
-    `).get() as { avg: number | null }).avg ?? 0;
+export async function GET(
+  req: NextRequest
+) {
 
-  const avgBugReportStudy =
-    (db.prepare(`
-      SELECT AVG(bug_report_study_minutes) as avg
-      FROM daily_entries
-    `).get() as { avg: number | null }).avg ?? 0;
+  const range =
+    (req.nextUrl.searchParams.get(
+      "range"
+    ) ?? "all") as TimeRange;
 
-  const workoutDays =
-    (db.prepare(`
-      SELECT COUNT(*) as total
-      FROM daily_entries
-      WHERE workout = 1
-    `).get() as { total: number }).total;
+  const dailyEntries =
+    getEntries(range);
 
-  const focusFeeling =
-    (db.prepare(`
-      SELECT focus_feeling,
-      COUNT(*) as total
-      FROM daily_entries
-      WHERE focus_feeling IS NOT NULL
-      AND focus_feeling != ''
-      GROUP BY focus_feeling
-      ORDER BY total DESC
-      LIMIT 1
-    `).get() as
-      | { focus_feeling: string }
-      | undefined)?.focus_feeling ?? "No Data";
+  const activities =
+    getActivities(range);
+
+  const statistics =
+    buildStatistics(
+      dailyEntries,
+      activities
+    );
+
+  const today =
+    new Date()
+      .toISOString()
+      .split("T")[0];
+
+  const defaultEntry: DailyEntry = {
+    date: today,
+    sleep_hours: 0,
+    bed_time: "",
+    reading: 0,
+    focus_feeling: "",
+    workout: 0,
+    steps: 0,
+    notes: "",
+  };
+
+  const todayEntry =
+    getTodayEntry(today) ??
+    defaultEntry;
+
+  const {
+    insights,
+  } = generateInsights(
+    dailyEntries,
+    activities,
+    todayEntry
+  );
 
   return NextResponse.json({
-    totalRecon,
-    totalTargets,
-    totalFindings,
 
-    avgSleep,
-    avgLearning,
+    range,
 
-    avgReadingBeforeBed,
-    avgNoScreenHours,
-    avgBugReportStudy,
+    summary:
+      generateSummary(
+        statistics
+      ),
 
-    workoutDays,
+    scoreTrend:
+      generateScoreTrend(
+        activities
+      ),
 
-    focusFeeling,
+    activityDistribution:
+      generateActivityDistribution(
+        activities
+      ),
+
+    habitRanking:
+      generateHabitRanking(
+        insights
+      ),
+
+    report:
+      generatePeriodReport(
+        statistics,
+        range
+      ),
+
+    milestones:
+      generateMilestones(
+        activities
+      ),
+
+    personalRecords:
+      generatePersonalRecords(
+        statistics,
+        dailyEntries
+      ),
+
+    heatmap:
+      generateHeatmap(
+        statistics
+      ),
+
   });
+
 }

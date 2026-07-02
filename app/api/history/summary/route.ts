@@ -1,16 +1,37 @@
-import db from "@/lib/db";
 import { NextResponse } from "next/server";
 
-export async function GET() {
-  const rows = db.prepare(`
-    SELECT
-      date,
-      type,
-      COUNT(*) as total
-    FROM activities
-    GROUP BY date, type
-    ORDER BY date DESC
-  `).all();
+import {
+  getEntries,
+} from "@/lib/repositories/dailyEntries";
 
-  return NextResponse.json(rows);
+import {
+  getActivities,
+} from "@/lib/repositories/activities";
+
+import {
+  generateHistoryTimeline,
+  generateHistorySummary,
+} from "@/lib/history";
+
+export async function GET() {
+
+  const entries =
+    getEntries("all");
+
+  const activities =
+    getActivities("all");
+
+  const history =
+    generateHistoryTimeline(
+      entries,
+      activities
+    );
+
+  const summary =
+    generateHistorySummary(
+      history
+    );
+
+  return NextResponse.json(summary);
+
 }

@@ -2,24 +2,48 @@ import db from "../lib/db";
 
 db.exec(`
 CREATE TABLE IF NOT EXISTS daily_entries (
-    id INTEGER PRIMARY KEY AUTOINCREMENT,
-    date TEXT UNIQUE,
+    date TEXT PRIMARY KEY,
+
     sleep_hours REAL,
-    wake_time TEXT,
-    workout INTEGER,
-    reading_minutes INTEGER,
-    screen_time REAL,
-    energy INTEGER,
-    performance TEXT,
-    deep_work TEXT,
+
+    bed_time TEXT,
+
+    reading INTEGER DEFAULT 0,
+
+    focus_feeling TEXT CHECK (
+        focus_feeling IN (
+            'Distracted',
+            'Focused',
+            'Deep',
+            'Flow State'
+        )
+    ),
+
+    workout INTEGER DEFAULT 0 CHECK(workout IN (0,1)),
+
+    steps INTEGER DEFAULT 0,
+
     notes TEXT
 );
 
 CREATE TABLE IF NOT EXISTS activities (
     id INTEGER PRIMARY KEY AUTOINCREMENT,
-    date TEXT,
-    type TEXT,
-    value INTEGER DEFAULT 1
+
+    date TEXT NOT NULL,
+
+    type TEXT NOT NULL CHECK(
+        type IN (
+            'learning',
+            'bug_report',
+            'recon',
+            'target',
+            'finding'
+        )
+    ),
+
+    count INTEGER NOT NULL DEFAULT 1,
+
+    UNIQUE(date, type)
 );
 `);
 

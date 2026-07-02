@@ -2,95 +2,59 @@
 
 import Link from "next/link";
 import { useEffect, useState } from "react";
-
-type Stats = {
-  [key: string]: number;
-};
+import { DashboardData } from "@/lib/types/dashboard";
 
 const activityTypes = [
-  { label: "Target", type: "target_tested" },
-  { label: "Recon", type: "recon_session" },
+  { label: "Learning", type: "learning" },
+  { label: "Bug Report", type: "bug_report" },
+  { label: "Recon", type: "recon" },
+  { label: "Target", type: "target" },
   { label: "Finding", type: "finding" },
 ];
 
 export default function Home() {
   const [isSaved, setIsSaved] = useState(false);
-  const [stats, setStats] = useState<Stats>({});
-  const [summary, setSummary] = useState<any>(null);
-  const [averageOutput, setAverageOutput] = useState(0);
-  const [remark, setRemark] = useState({
-    score: 0,
-    remark: "Poor",
-  });
+
+  const [dashboard, setDashboard] =
+    useState<DashboardData | null>(null);
+
   const [daily, setDaily] = useState({
-    sleep_hours: "",
-    wake_time: "",
-    workout: false,
-
-    learning_hours: "",
-
-    reading_before_bed_minutes: "",
-    bug_report_study_minutes: "",
-
-    no_screen_hours: "",
-
+    sleep_hours: 0,
+    bed_time: "",
+    reading: 0,
     focus_feeling: "",
-
+    workout: false,
+    steps: 0,
     notes: "",
   });
-  const [outputData, setOutputData] = useState({
-    recon: 0,
-    targets: 0,
-    findings: 0,
-    output: 0,
-  });
 
-  const loadRemark = async () => {
-    const res = await fetch("/api/remark");
-    const data = await res.json();
-    setRemark(data);
-  };
+  const loadDashboard = async () => {
+    const res = await fetch("/api/dashboard");
+    const data: DashboardData = await res.json();
 
-  const loadAverageOutput = async () => {
-    const res = await fetch("/api/output/average");
-    const data = await res.json();
-    setAverageOutput(data.average);
-  };
-
-  const loadOutput = async () => {
-    const res = await fetch("/api/output");
-    const data = await res.json();
-    setOutputData(data);
-  };
-
-  const loadStats = async () => {
-    const res = await fetch("/api/stats");
-    const data = await res.json();
-    const mapped: Stats = {};
-    data.forEach((row: any) => {
-      mapped[row.type] = row.total;
-    });
-    setStats(mapped);
+    setDashboard(data);
   };
 
   const loadDaily = async () => {
     const res = await fetch("/api/daily");
     const data = await res.json();
+
     if (Object.keys(data).length) {
-      setDaily(data);
+      setDaily({
+        sleep_hours: data.sleep_hours ?? 0,
+        bed_time: data.bed_time ?? "",
+        reading: data.reading ?? 0,
+        focus_feeling: data.focus_feeling ?? "",
+        workout: Boolean(data.workout),
+        steps: data.steps ?? 0,
+        notes: data.notes ?? "",
+      });
     }
   };
 
   useEffect(() => {
-    loadRemark();
-    loadStats();
+    loadDashboard();
     loadDaily();
-    loadOutput();
-    loadAverageOutput();
-
-    fetch("/api/insights/summary")
-      .then((res) => res.json())
-      .then(setSummary);
   }, []);
 
   const addActivity = async (type: string) => {
@@ -101,9 +65,8 @@ export default function Home() {
       },
       body: JSON.stringify({ type }),
     });
-    loadStats();
-    loadOutput();
-    loadAverageOutput();
+
+    await loadDashboard();
   };
 
   const saveDaily = async () => {
@@ -114,50 +77,42 @@ export default function Home() {
       },
       body: JSON.stringify(daily),
     });
+
+    await loadDashboard();
   };
 
-  const handleSave = () => {
-    saveDaily();
+  const handleSave = async () => {
+    await saveDaily();
+
     setIsSaved(true);
 
     setTimeout(() => {
       setIsSaved(false);
-    }, 5000); // 5000 milliseconds = 5 seconds
+    }, 5000);
   };
 
-  const completionItems = [
-    daily.sleep_hours,
-    daily.wake_time,
-    daily.reading_before_bed_minutes,
-    daily.no_screen_hours,
-    daily.learning_hours,
-    daily.bug_report_study_minutes,
-    daily.focus_feeling,
-  ];
-
-  const completed =
-    completionItems.filter(Boolean).length;
-
-  const completionPercent =
-    Math.round(
-      (completed / completionItems.length) * 100
-    );
-
-  let performance = "Average";
-  if (outputData.output > averageOutput * 1.5) {
-    performance = "Exceptional";
-  } else if (outputData.output > averageOutput * 1.2) {
-    performance = "Above Average";
-  } else if (outputData.output < averageOutput * 0.7) {
-    performance = "Below Average";
-  }
-
-  // Visual helper for badge styling based on performance tier
   const getPerformanceColor = (status: string) => {
-    if (status === "Exceptional" || status === "Above Average" || status === "Good" || status === "Excellent") return "bg-emerald-500/10 text-emerald-400 border-emerald-500/20";
-    if (status === "Below Average" || status === "Poor") return "bg-rose-500/10 text-rose-400 border-rose-500/20";
-    return "bg-slate-500/10 text-slate-400 border-slate-500/20";
+    switch (status) {
+      case "Excellent":
+      case "Good":
+        return "bg-emerald-500/10 text-emerald-400 border-emerald-500/20";
+
+      case "Poor":
+      case "Low":
+        return "bg-rose-500/10 text-rose-400 border-rose-500/20";
+
+      default:
+        return "bg-slate-500/10 text-slate-400 border-slate-500/20";
+    }
   };
+
+  if (!dashboard) {
+    return (
+      <main className="min-h-screen bg-slate-950 flex items-center justify-center text-slate-400">
+        Loading Dashboard...
+      </main>
+    );
+  }
 
   return (
     <main className="min-h-screen bg-slate-950 text-slate-100 selection:bg-cyan-500 selection:text-slate-950">
@@ -185,183 +140,273 @@ export default function Home() {
         </div>
       </header>
 
-      <div className="max-w-7xl mx-auto px-6 py-8 space-y-8">
-        <div className="bg-slate-900/40 border border-slate-800/80 rounded-xl p-5 shadow-lg backdrop-blur-md flex flex-col justify-between">
+      <div className="bg-slate-900/40 border border-slate-800/80 rounded-xl p-5 shadow-lg backdrop-blur-md">
+        <div className="flex items-center justify-between">
+
           <div>
-            <h2 className="text-xs font-semibold uppercase tracking-wider text-slate-400 mb-2">
+            <h2 className="text-xs font-semibold uppercase tracking-wider text-slate-400">
               Today's Completion
             </h2>
-            <div className="text-4xl font-black font-mono tracking-tight text-transparent bg-clip-text bg-linear-to-r select-none from-cyan-400 to-blue-500 mt-1">
-              {completionPercent}%
+
+            <div className="text-4xl font-black font-mono tracking-tight text-transparent bg-clip-text bg-linear-to-r from-cyan-400 to-blue-500 mt-2">
+              {dashboard.completion.percent}%
             </div>
           </div>
-        </div>
 
-        {summary && (
-          <div className="bg-slate-900/40 border border-slate-800/80 rounded-xl p-6 shadow-xl backdrop-blur-md">
-
-            <div className="flex items-center justify-between mb-5">
-              <div>
-                <h2 className="text-sm font-semibold uppercase tracking-wider text-slate-400">
-                  Insight Summary
-                </h2>
-
-                <p className="text-xs text-slate-500 mt-1">
-                  Strongest correlations discovered so far.
-                </p>
-              </div>
-
-              <Link
-                href="/insights"
-                className="text-sm text-cyan-400 hover:text-cyan-300"
-              >
-                View Full Insights →
-              </Link>
+          <div className="text-right">
+            <div className="text-xs text-slate-500">
+              Missing
             </div>
 
-            <div className="grid md:grid-cols-2 gap-4">
+            <div className="text-lg font-bold text-amber-400">
+              {dashboard.completion.missingCount}
+            </div>
+          </div>
 
-              <div className="bg-slate-950/40 border border-emerald-500/20 rounded-xl p-4">
-                <div className="text-xs uppercase tracking-wider text-emerald-400 mb-2">
-                  Best Habit
-                </div>
+        </div>
 
-                <div className="text-lg font-bold text-slate-200">
-                  {summary.bestHabit}
-                </div>
+        {dashboard.completion.missing.length > 0 && (
+          <div className="mt-5 pt-4 border-t border-slate-800">
 
-                <div className="mt-3 flex justify-between text-sm">
-                  <span className="text-slate-500">
-                    Impact
-                  </span>
+            <div className="text-xs uppercase tracking-wider text-slate-500 mb-2">
+              Remaining
+            </div>
 
-                  <span className="font-bold text-emerald-400">
-                    +{summary.bestImpact}%
-                  </span>
-                </div>
+            <div className="flex flex-wrap gap-2">
 
-                <div className="mt-1 flex justify-between text-sm">
-                  <span className="text-slate-500">
-                    Confidence
-                  </span>
+              {dashboard.completion.missing.map((item) => (
 
-                  <span className="text-slate-300">
-                    {summary.bestConfidence}
-                  </span>
-                </div>
-              </div>
+                <span
+                  key={item}
+                  className="px-3 py-1 rounded-full bg-amber-500/10 border border-amber-500/20 text-xs text-amber-300"
+                >
+                  {item}
+                </span>
 
-              <div className="bg-slate-950/40 border border-rose-500/20 rounded-xl p-4">
-                <div className="text-xs uppercase tracking-wider text-rose-400 mb-2">
-                  Biggest Negative
-                </div>
-
-                <div className="text-lg font-bold text-slate-200">
-                  {summary.worstHabit}
-                </div>
-
-                <div className="mt-3 flex justify-between text-sm">
-                  <span className="text-slate-500">
-                    Impact
-                  </span>
-
-                  <span className="font-bold text-rose-400">
-                    {summary.worstImpact}%
-                  </span>
-                </div>
-
-                <div className="mt-1 flex justify-between text-sm">
-                  <span className="text-slate-500">
-                    Confidence
-                  </span>
-
-                  <span className="text-slate-300">
-                    {summary.worstConfidence}
-                  </span>
-                </div>
-              </div>
+              ))}
 
             </div>
 
           </div>
         )}
+      </div>
+      <div className="bg-slate-900/40 border border-slate-800/80 rounded-xl p-6 shadow-xl backdrop-blur-md">
 
-        {/* Row 1: High Level Metrics Overviews */}
-        <div className="grid grid-cols-1 md:grid-cols-3 gap-6">
+        <div className="flex items-center justify-between">
 
-          {/* Today's Output Overview */}
-          <div className="bg-slate-900/40 border border-slate-800/80 rounded-xl p-6 shadow-xl backdrop-blur-md flex flex-col justify-between">
-            <div>
-              <div className="flex items-center justify-between mb-4">
-                <h2 className="text-sm font-semibold uppercase tracking-wider text-slate-400">Today's Output</h2>
-                <span className={`text-xs px-2.5 py-1 rounded-full border ${getPerformanceColor(performance)} font-medium`}>
-                  {performance}
-                </span>
-              </div>
-              <div className="space-y-2 text-sm text-slate-300">
-                <div className="flex justify-between border-b border-slate-800/50 pb-1.5">
-                  <span>Recon Sessions</span>
-                  <span className="font-mono font-medium">{outputData.recon}</span>
-                </div>
-                <div className="flex justify-between border-b border-slate-800/50 pb-1.5">
-                  <span>Targets Tested</span>
-                  <span className="font-mono font-medium">{outputData.targets}</span>
-                </div>
-                <div className="flex justify-between pb-1.5">
-                  <span>Findings Logged</span>
-                  <span className="font-mono font-medium text-amber-400">{outputData.findings}</span>
-                </div>
-              </div>
-            </div>
-            <div className="mt-6 pt-4 border-t border-slate-800 flex items-baseline justify-between">
-              <span className="text-xs text-slate-400">Score / Avg ({averageOutput.toFixed(1)})</span>
-              <div className="text-3xl font-black tracking-tight text-transparent bg-clip-text bg-linear-to-r select-none from-cyan-400 to-blue-500">
-                {outputData.output}
-              </div>
-            </div>
+          <div>
+
+            <h2 className="text-sm font-semibold uppercase tracking-wider text-slate-400">
+              Today's Focus
+            </h2>
+
+            <p className="text-xs text-slate-500 mt-1">
+              The highest-impact recommendation based on your habits.
+            </p>
+
           </div>
 
-          {/* Daily Analysis Summary */}
-          <div className="bg-slate-900/40 border border-slate-800/80 rounded-xl p-6 shadow-xl backdrop-blur-md flex flex-col justify-between">
+          <Link
+            href="/insights"
+            className="text-sm text-cyan-400 hover:text-cyan-300"
+          >
+            View All →
+          </Link>
+
+        </div>
+
+        <div className="mt-6 rounded-xl border border-cyan-500/20 bg-cyan-500/5 p-5">
+
+          <div className="flex items-center justify-between">
+
             <div>
-              <div className="flex items-center justify-between mb-4">
-                <h2 className="text-sm font-semibold uppercase tracking-wider text-slate-400">Daily Analysis</h2>
-                <span className={`text-xs px-2.5 py-1 rounded-full border ${getPerformanceColor(remark.remark)} font-medium`}>
-                  {remark.remark}
-                </span>
+
+              <div className="text-xs uppercase tracking-wider text-cyan-400">
+                Focus Habit
               </div>
-              <p className="text-xs text-slate-400 leading-relaxed">
-                Automated evaluation of performance trends mapped against metrics thresholds.
+
+              <h3 className="text-2xl font-bold text-slate-100 mt-1">
+                {dashboard.focus.habit}
+              </h3>
+
+            </div>
+
+            <span
+              className={`px-3 py-1 rounded-full border text-xs font-medium ${getPerformanceColor(dashboard.focus.strength)
+                }`}
+            >
+              {dashboard.focus.strength}
+            </span>
+
+          </div>
+
+          <div className="mt-5">
+
+            <div className="text-xs uppercase tracking-wider text-slate-500 mb-1">
+              Recommendation
+            </div>
+
+            <p className="text-slate-200">
+              {dashboard.focus.recommendation}
+            </p>
+
+          </div>
+
+          <div className="mt-5">
+
+            <div className="text-xs uppercase tracking-wider text-slate-500 mb-1">
+              Why
+            </div>
+
+            <p className="text-slate-400 leading-relaxed">
+              {dashboard.focus.explanation}
+            </p>
+
+          </div>
+
+          <div className="mt-6 flex items-center justify-between border-t border-slate-800 pt-4">
+
+            <span className="text-xs text-slate-500">
+              Confidence
+            </span>
+
+            <span className="text-sm font-medium text-slate-300">
+              {dashboard.focus.confidence}
+            </span>
+
+          </div>
+
+        </div>
+
+      </div>
+
+      {/* Row 1: High Level Metrics Overviews */}
+      <div className="grid grid-cols-1 md:grid-cols-2 gap-6">
+        <div className="bg-slate-900/40 border border-slate-800/80 rounded-xl p-6 shadow-xl backdrop-blur-md flex flex-col justify-between">
+
+          <div className="flex items-center justify-between">
+
+            <div>
+
+              <h2 className="text-sm font-semibold uppercase tracking-wider text-slate-400">
+                Today's Productivity
+              </h2>
+
+              <p className="text-xs text-slate-500 mt-1">
+                Compared against your own historical average.
               </p>
+
             </div>
-            <div className="mt-6 pt-4 border-t border-slate-800 flex items-baseline justify-between">
-              <span className="text-xs text-slate-400">Remark Score</span>
-              <div className="text-3xl font-black tracking-tight text-slate-200">
-                {remark.score}
-              </div>
-            </div>
+
+            <span
+              className={`px-3 py-1 rounded-full border text-xs font-medium ${getPerformanceColor(
+                dashboard.productivity.level
+              )}`}
+            >
+              {dashboard.productivity.level}
+            </span>
+
           </div>
 
-          {/* Aggregated Aggressors (Today's Direct Stats Counter) */}
-          <div className="bg-slate-900/40 border border-slate-800/80 rounded-xl p-6 shadow-xl backdrop-blur-md flex flex-col justify-between">
-            <div>
-              <h2 className="text-sm font-semibold uppercase tracking-wider text-slate-400 mb-4">Activity Accumulator</h2>
-              <div className="grid grid-cols-2 gap-3 text-center">
-                <div className="bg-slate-950/50 p-3 rounded-lg border border-slate-800/60">
-                  <div className="text-xs text-slate-500 mb-0.5">Recon</div>
-                  <div className="text-lg font-bold font-mono text-slate-200">{stats.recon_session || 0}</div>
-                </div>
-                <div className="bg-slate-950/50 p-3 rounded-lg border border-slate-800/60">
-                  <div className="text-xs text-slate-500 mb-0.5">Targets</div>
-                  <div className="text-lg font-bold font-mono text-slate-200">{stats.target_tested || 0}</div>
-                </div>
-                <div className="bg-slate-950/50 p-3 rounded-lg border border-slate-800/60">
-                  <div className="text-xs text-slate-500 mb-0.5">Findings</div>
-                  <div className="text-lg font-bold font-mono text-amber-500">{stats.finding || 0}</div>
-                </div>
-              </div>
+          <div className="mt-8">
+
+            <div className="text-5xl font-black text-transparent bg-clip-text bg-linear-to-r from-cyan-400 to-blue-500">
+              {dashboard.productivity.level}
             </div>
+
+            <p className="text-slate-400 mt-3 leading-relaxed">
+              {dashboard.productivity.reason}
+            </p>
+
           </div>
+
+          {dashboard.productivity.contributors.length > 0 && (
+
+            <div className="mt-8 border-t border-slate-800 pt-5">
+
+              <div className="text-xs uppercase tracking-wider text-slate-500 mb-3">
+                Biggest Contributors
+              </div>
+
+              <div className="flex flex-wrap gap-2">
+
+                {dashboard.productivity.contributors.map((item) => (
+
+                  <span
+                    key={item.type}
+                    className="px-3 py-1 rounded-full bg-cyan-500/10 border border-cyan-500/20 text-cyan-300 text-xs"
+                  >
+                    {item.type.replace("_", " ")}
+                  </span>
+
+                ))}
+
+              </div>
+
+            </div>
+
+          )}
+
+        </div>
+
+        <div className="bg-slate-900/40 border border-slate-800/80 rounded-xl p-6 shadow-xl backdrop-blur-md">
+
+          <div className="flex items-center justify-between mb-5">
+
+            <div>
+
+              <h2 className="text-sm font-semibold uppercase tracking-wider text-slate-400">
+                Today's Activity
+              </h2>
+
+              <p className="text-xs text-slate-500 mt-1">
+                Events that contributed to today's productivity.
+              </p>
+
+            </div>
+
+          </div>
+
+          {dashboard.productivity.contributors.length === 0 ? (
+
+            <div className="rounded-xl border border-dashed border-slate-700 p-8 text-center">
+
+              <p className="text-slate-400">
+                No work recorded yet.
+              </p>
+
+              <p className="text-xs text-slate-500 mt-2">
+                Start logging Learning, Recon or Targets.
+              </p>
+
+            </div>
+
+          ) : (
+
+            <div className="space-y-3">
+
+              {dashboard.productivity.contributors.map((item) => (
+
+                <div
+                  key={item.type}
+                  className="flex items-center justify-between rounded-lg bg-slate-950/50 border border-slate-800 px-4 py-3"
+                >
+
+                  <span className="text-slate-200 capitalize">
+                    {item.type.replace("_", " ")}
+                  </span>
+
+                  <span className="text-cyan-400 font-semibold">
+                    +{item.contribution}
+                  </span>
+
+                </div>
+
+              ))}
+
+            </div>
+
+          )}
 
         </div>
 
@@ -388,93 +433,136 @@ export default function Home() {
 
           {/* Daily Input Forms Context */}
           <div className="lg:col-span-2 bg-slate-900/40 border border-slate-800/80 rounded-xl p-6 shadow-xl backdrop-blur-md">
-            <h2 className="text-lg font-bold text-slate-200 mb-1">Daily Telemetry Inputs</h2>
-            <p className="text-xs text-slate-400 mb-4">Track biometric and environmental vectors influencing cognitive throughput.</p>
+            <h2 className="text-lg font-bold text-slate-200 mb-1">
+              Daily Habits
+            </h2>
+
+            <p className="text-xs text-slate-400 mb-4">
+              Record the habits that may influence your productivity.
+            </p>
 
             <div className="grid grid-cols-1 sm:grid-cols-2 gap-4">
 
               <div className="flex flex-col gap-1.5">
                 <label className="text-xs font-semibold text-slate-400">Sleep Hours</label>
-                <input
-                  type="number"
-                  placeholder="e.g. 7.5"
-                  value={daily.sleep_hours}
-                  onChange={(e) => setDaily({ ...daily, sleep_hours: e.target.value })}
-                  className="bg-slate-950 border border-slate-800 rounded-lg p-2.5 text-sm text-slate-200 placeholder:text-slate-600 focus:outline-none focus:border-cyan-500 focus:ring-1 focus:ring-cyan-500 transition-all"
-                />
+                <div className="flex flex-wrap gap-2">
+                  {[5, 6, 7, 8, 9, 10].map((h) => (
+                    <button
+                      key={h}
+                      type="button"
+                      onClick={() => setDaily({ ...daily, sleep_hours: h })}
+                      className={`px-3 py-2 rounded-lg text-sm transition ${daily.sleep_hours == h
+                        ? "bg-cyan-500 text-slate-950"
+                        : "bg-slate-950 border border-slate-800 text-slate-300 hover:border-cyan-500"
+                        }`}
+                    >
+                      {h}h
+                    </button>
+                  ))}
+                </div>
               </div>
 
               <div className="flex flex-col gap-1.5">
-                <label className="text-xs font-semibold text-slate-400">Wake Time</label>
-                <input
-                  type="time"
-                  value={daily.wake_time}
-                  onChange={(e) => setDaily({ ...daily, wake_time: e.target.value })}
-                  className="bg-slate-950 border border-slate-800 rounded-lg p-2.5 text-sm text-slate-200 focus:outline-none focus:border-cyan-500 focus:ring-1 focus:ring-cyan-500 transition-all"
-                />
-              </div>
+               
+              <label className="text-xs font-semibold text-slate-400">
+                Bed Time
+              </label>
 
-              <div className="flex flex-col gap-1.5">
-                <label className="text-xs font-semibold text-slate-400">Reading Minutes (Before Bed)</label>
-                <input
-                  type="number"
-                  placeholder="e.g. 30"
-                  value={daily.reading_before_bed_minutes}
-                  onChange={(e) => setDaily({ ...daily, reading_before_bed_minutes: e.target.value })}
-                  className="bg-slate-950 border border-slate-800 rounded-lg p-2.5 text-sm text-slate-200 placeholder:text-slate-600 focus:outline-none focus:border-cyan-500 focus:ring-1 focus:ring-cyan-500 transition-all"
-                />
-              </div>
-
-              <div className="flex flex-col gap-1.5">
-                <label className="text-xs font-semibold text-slate-400">No Screen Hours (Before Bed)</label>
-                <input
-                  type="number"
-                  placeholder="e.g. 1"
-                  value={daily.no_screen_hours}
-                  onChange={(e) => setDaily({ ...daily, no_screen_hours: e.target.value })}
-                  className="bg-slate-950 border border-slate-800 rounded-lg p-2.5 text-sm text-slate-200 placeholder:text-slate-600 focus:outline-none focus:border-cyan-500 focus:ring-1 focus:ring-cyan-500 transition-all"
-                />
-              </div>
-
-              <div className="flex flex-col gap-1.5">
-                <label className="text-xs font-semibold text-slate-400">Learning Hours</label>
-                <input
-                  type="number"
-                  placeholder="e.g. 1"
-                  value={daily.learning_hours}
-                  onChange={(e) => setDaily({ ...daily, learning_hours: e.target.value })}
-                  className="bg-slate-950 border border-slate-800 rounded-lg p-2.5 text-sm text-slate-200 placeholder:text-slate-600 focus:outline-none focus:border-cyan-500 focus:ring-1 focus:ring-cyan-500 transition-all"
-                />
-              </div>
-
-              <div className="flex flex-col gap-1.5">
-                <label className="text-xs font-semibold text-slate-400">Bug Report Study Minutes</label>
-                <input
-                  type="number"
-                  placeholder="e.g. 1"
-                  value={daily.bug_report_study_minutes}
-                  onChange={(e) => setDaily({ ...daily, bug_report_study_minutes: e.target.value })}
-                  className="bg-slate-950 border border-slate-800 rounded-lg p-2.5 text-sm text-slate-200 placeholder:text-slate-600 focus:outline-none focus:border-cyan-500 focus:ring-1 focus:ring-cyan-500 transition-all"
-                />
+              <input
+                type="time"
+                value={daily.bed_time}
+                onChange={(e) =>
+                  setDaily({
+                    ...daily,
+                    bed_time: e.target.value,
+                  })
+                }
+                className="bg-slate-950 border border-slate-800 rounded-lg p-2.5 text-sm text-slate-200 focus:outline-none focus:border-cyan-500 focus:ring-1 focus:ring-cyan-500 transition-all"
+              />
               </div>
 
               <div className="flex flex-col gap-1.5">
                 <label className="text-xs font-semibold text-slate-400">Focus Feeling</label>
-                <select
-                  value={daily.focus_feeling}
-                  onChange={(e) => setDaily({ ...daily, focus_feeling: e.target.value })}
-                  className="bg-slate-950 border border-slate-800 rounded-lg p-2.5 text-sm text-slate-300 focus:outline-none focus:border-cyan-500 focus:ring-1 focus:ring-cyan-500 transition-all"
-                >
-                  <option value="">Select Focus Level</option>
-                  <option value="Distracted">Distracted</option>
-                  <option value="Focused">Focused</option>
-                  <option value="Deep">Deep</option>
-                  <option value="Flow State">Flow State</option>
-                </select>
+                <div className="flex flex-wrap gap-2">
+                  {["Distracted", "Focused", "Deep", "Flow State"].map((level) => (
+                    <button
+                      key={level}
+                      type="button"
+                      onClick={() =>
+                        setDaily({
+                          ...daily,
+                          focus_feeling: level,
+                        })
+                      }
+                      className={`px-3 py-2 rounded-lg text-sm transition ${daily.focus_feeling === level
+                        ? "bg-cyan-500 text-slate-950"
+                        : "bg-slate-950 border border-slate-800 text-slate-300 hover:border-cyan-500"
+                        }`}
+                    >
+                      {level}
+                    </button>
+                  ))}
+                </div>
               </div>
 
+              <div className="flex flex-col gap-1.5">
+  <label className="text-xs font-semibold text-slate-400">
+    Reading
+  </label>
+
+  <div className="flex flex-wrap gap-2">
+    {[0, 15, 30, 45, 60, 90, 120].map((m) => (
+      <button
+        key={m}
+        type="button"
+        onClick={() =>
+          setDaily({
+            ...daily,
+            reading: m,
+          })
+        }
+        className={`px-3 py-2 rounded-lg text-sm transition ${
+          daily.reading === m
+            ? "bg-cyan-500 text-slate-950"
+            : "bg-slate-950 border border-slate-800 text-slate-300 hover:border-cyan-500"
+        }`}
+      >
+        {m}m
+      </button>
+    ))}
+  </div>
+</div>
+
+<div className="flex flex-col gap-1.5">
+  <label className="text-xs font-semibold text-slate-400">
+    Steps
+  </label>
+
+  <div className="flex flex-wrap gap-2">
+    {[0, 3000, 5000, 8000, 10000, 15000].map((steps) => (
+      <button
+        key={steps}
+        type="button"
+        onClick={() =>
+          setDaily({
+            ...daily,
+            steps,
+          })
+        }
+        className={`px-3 py-2 rounded-lg text-sm transition ${
+          daily.steps === steps
+            ? "bg-cyan-500 text-slate-950"
+            : "bg-slate-950 border border-slate-800 text-slate-300 hover:border-cyan-500"
+        }`}
+      >
+        {steps >= 1000 ? `${steps / 1000}k` : steps}
+      </button>
+    ))}
+  </div>
+</div>
+
               <div className="flex flex-col gap-1.5 sm:col-span-2">
-                <label className="text-xs font-semibold text-slate-400">Qualitative Log Notes</label>
+                <label className="text-xs font-semibold text-slate-400">Notes</label>
                 <textarea
                   value={daily.notes || ""}
                   onChange={(e) =>
@@ -483,7 +571,7 @@ export default function Home() {
                       notes: e.target.value,
                     })
                   }
-                  placeholder="What external factors or anomalies affected throughput today?"
+                  placeholder="Anything unusual that affected your day?"
                   rows={3}
                   className="bg-slate-950 border border-slate-800 rounded-lg p-2.5 text-sm text-slate-200 placeholder:text-slate-600 focus:outline-none focus:border-cyan-500 focus:ring-1 focus:ring-cyan-500 transition-all resize-none"
                 />
@@ -493,22 +581,35 @@ export default function Home() {
 
             <div className="mt-6 pt-4 border-t border-slate-800/60 flex items-center justify-between gap-4">
               <label className="flex items-center gap-2.5 text-sm select-none cursor-pointer text-slate-300 group">
-                <input
-                  type="checkbox"
-                  checked={daily.workout}
-                  onChange={(e) => setDaily({ ...daily, workout: e.target.checked })}
-                  className="w-4 h-4 rounded border-slate-800 bg-slate-950 text-cyan-500 accent-cyan-500 focus:ring-0 focus:ring-offset-0 transition-all"
-                />
-                <span className="group-hover:text-slate-100 transition-colors">Physical Workout Completed</span>
+                <div className="flex gap-2">
+                  {[true, false].map((value) => (
+                    <button
+                      key={String(value)}
+                      type="button"
+                      onClick={() =>
+                        setDaily({
+                          ...daily,
+                          workout: value,
+                        })
+                      }
+                      className={`px-4 py-2 rounded-lg text-sm transition ${daily.workout === value
+                        ? "bg-cyan-500 text-slate-950"
+                        : "bg-slate-950 border border-slate-800 text-slate-300 hover:border-cyan-500"
+                        }`}
+                    >
+                      {value ? "Yes" : "No"}
+                    </button>
+                  ))}
+                </div>
+                <span className="group-hover:text-slate-100 transition-colors">Workout</span>
               </label>
 
               <button
                 onClick={handleSave}
-               className={`font-semibold px-5 py-2.5 rounded-lg text-sm transition-all shadow-md active:scale-[0.98] ${
-    isSaved 
-      ? 'bg-emerald-500 text-white cursor-not-allowed' 
-      : 'bg-cyan-500 hover:bg-cyan-400 text-slate-950'
-  }`}
+                className={`font-semibold px-5 py-2.5 rounded-lg text-sm transition-all shadow-md active:scale-[0.98] ${isSaved
+                  ? 'bg-emerald-500 text-white cursor-not-allowed'
+                  : 'bg-cyan-500 hover:bg-cyan-400 text-slate-950'
+                  }`}
               >
                 {isSaved ? '✓ Saved!' : 'Save Metrics Log'}
               </button>
@@ -519,6 +620,6 @@ export default function Home() {
         </div>
 
       </div>
-    </main>
+    </main >
   );
 }
