@@ -1,5 +1,5 @@
 import { Target } from "lucide-react";
-import MetricCard from "@/components/ui/MetricCard";
+import { MetricCard } from "@/components/ui/MetricCard";
 
 type Props = {
   score: number;

@@ -1,6 +1,6 @@
 import Link from "next/link";
 
-import Panel from "@/components/ui/Panel";
+import { Panel } from "@/components/ui/Panel";
 
 import TargetStatusBadge from "./TargetStatusBadge";
 

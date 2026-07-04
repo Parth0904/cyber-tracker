@@ -1,16 +1,16 @@
 export { Button } from "./Button";
-export { Divider } from "./Divider";
+export { default as Divider } from "./Divider";
 export { EmptyState } from "./EmptyState";
-export { FilterBar } from "./FilterBar";
+export { default as FilterBar } from "./FilterBar";
 export { Input } from "./Input";
 export { MetricCard } from "./MetricCard";
 export { Modal } from "./Modal";
-export { Page } from "./Page";
+export { default as Page } from "./Page";
 export { Panel } from "./Panel";
-export { SearchInput } from "./SearchInput";
-export { Section } from "./Section";
+export { default as SearchInput } from "./SearchInput";
+export { default as Section } from "./Section";
 export { Skeleton } from "./Skeleton";
-export { StatGrid } from "./StatGrid";
+export { default as StatGrid } from "./StatGrid";
 export { Textarea } from "./Textarea";
 
 // New Core Primitives Added to the Barrel Map

@@ -1,5 +1,5 @@
 import { Brain } from "lucide-react";
-import Panel from "@/components/ui/Panel";
+import { Panel } from "@/components/ui/Panel";
 
 type Props = {
   recommendation: string;

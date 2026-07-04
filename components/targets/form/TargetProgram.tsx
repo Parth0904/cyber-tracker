@@ -1,4 +1,5 @@
-import Input from "@/components/ui/Input";
+import * as React from "react";
+import { Input } from "@/components/ui/Input";
 
 type Props = {
   scope_url: string;
@@ -17,7 +18,7 @@ export default function TargetProgram({
       <Input
         placeholder="Scope URL"
         value={scope_url}
-        onChange={(e) =>
+        onChange={(e: React.ChangeEvent<HTMLInputElement>) =>
           onChange(
             "scope_url",
             e.target.value
@@ -28,7 +29,7 @@ export default function TargetProgram({
       <Input
         placeholder="Program URL"
         value={program_url}
-        onChange={(e) =>
+        onChange={(e: React.ChangeEvent<HTMLInputElement>) =>
           onChange(
             "program_url",
             e.target.value

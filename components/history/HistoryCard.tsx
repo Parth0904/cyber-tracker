@@ -31,17 +31,18 @@ export default function HistoryCard({
         </div>
 
        <Badge
-  color={
+  variant={
     day.productivity.level === "Excellent"
-      ? "green"
+      ? "success"
       : day.productivity.level === "Good"
-      ? "blue"
+      ? "cyan"
       : day.productivity.level === "Normal"
-      ? "yellow"
-      : "red"
+      ? "warning"
+      : "danger"
   }
-  text={day.productivity.level}
-/>
+>
+  {day.productivity.level}
+</Badge>
 
       </div>
 

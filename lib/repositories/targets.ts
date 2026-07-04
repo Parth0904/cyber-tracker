@@ -160,3 +160,13 @@ export function restoreTarget(
   );
 
 }
+
+export function getAllTargetsWithArchived(): Target[] {
+  return many<Target>(
+    `
+      SELECT *
+      FROM targets
+      ORDER BY started_at DESC
+    `
+  );
+}

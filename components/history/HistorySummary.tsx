@@ -1,5 +1,4 @@
 import { Card } from "@/components/ui/Card";
-import { Stat } from "@/components/ui/Stat";
 
 type Props = {
   trackedDays: number;
@@ -8,6 +7,20 @@ type Props = {
 
   bestScore: number;
 };
+
+type StatProps = {
+  label: string;
+  value: string | number;
+};
+
+function Stat({ label, value }: StatProps) {
+  return (
+    <div className="p-4 border border-zinc-800/80 rounded-lg bg-zinc-950/40">
+      <span className="text-[10px] text-zinc-500 uppercase tracking-wider font-mono block">{label}</span>
+      <span className="text-xl font-bold text-white mt-1 block">{value}</span>
+    </div>
+  );
+}
 
 export default function HistorySummary({
   trackedDays,

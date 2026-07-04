@@ -1,5 +1,5 @@
-import Panel from "@/components/ui/Panel";
-import ProgressBar from "@/components/ui/ProgressBar";
+import { Panel } from "@/components/ui/Panel";
+import { Progress } from "@/components/ui/Progress";
 
 import { GoalProgress } from "@/lib/goals";
 
@@ -41,9 +41,8 @@ export default function GoalsProgress({
 
             </div>
 
-            <ProgressBar
+            <Progress
               value={goal.percentage}
-              max={100}
             />
 
           </div>

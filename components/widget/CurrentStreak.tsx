@@ -1,6 +1,6 @@
 import { Flame } from "lucide-react";
 
-import MetricCard from "@/components/ui/MetricCard";
+import { MetricCard } from "@/components/ui/MetricCard";
 
 type Props = {
   current: number;

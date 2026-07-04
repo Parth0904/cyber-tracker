@@ -4,6 +4,7 @@ export type ActivityRow = {
   date: string;
   type: ActivityType;
   count: number;
+  created_at?: string;
 };
 
 export type DailyEntry = {

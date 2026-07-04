@@ -9,10 +9,11 @@ export interface MetricCardProps extends React.HTMLAttributes<HTMLDivElement> {
     value: string | number;
     type: "positive" | "negative" | "neutral";
   };
+  icon?: React.ReactNode;
 }
 
 export const MetricCard = React.forwardRef<HTMLDivElement, MetricCardProps>(
-  ({ className = "", title, value, description, trend, ...props }, ref) => {
+  ({ className = "", title, value, description, trend, icon, ...props }, ref) => {
     const trendColors = {
       positive: "text-success-emerald bg-success-emerald/10 border-success-emerald/20",
       negative: "text-danger-rose bg-danger-rose/10 border-danger-rose/20",
@@ -23,11 +24,15 @@ export const MetricCard = React.forwardRef<HTMLDivElement, MetricCardProps>(
       <Card ref={ref} className={`flex flex-col justify-between min-h-[110px] ${className}`} {...props}>
         <div className="flex items-center justify-between gap-2">
           <span className="text-xs font-medium text-zinc-500 tracking-tight">{title}</span>
-          {trend && (
-            <span className={`text-[10px] font-mono px-1.5 py-0.5 rounded border ${trendColors[trend.type]}`}>
-              {trend.type === "positive" && "+"}
-              {trend.value}
-            </span>
+          {icon ? (
+            <div className="text-zinc-500 shrink-0">{icon}</div>
+          ) : (
+            trend && (
+              <span className={`text-[10px] font-mono px-1.5 py-0.5 rounded border ${trendColors[trend.type]}`}>
+                {trend.type === "positive" && "+"}
+                {trend.value}
+              </span>
+            )
           )}
         </div>
         <div className="mt-2 flex flex-col gap-0.5">

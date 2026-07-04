@@ -40,7 +40,6 @@ export function generateYearlyReport(
         ) / entries.length;
 
   return {
-
     year: now.getFullYear(),
 
     averageScore: 0,
@@ -48,19 +47,23 @@ export function generateYearlyReport(
     totalActivities:
       activities.length,
 
-    findings:
+    totalSessions: 0,
+
+    totalTargets: 0,
+
+    totalFindings:
       activities.filter(
         activity =>
           activity.type === "finding"
       ).length,
 
-    reports:
+    totalReports:
       activities.filter(
         activity =>
           activity.type === "bug_report"
       ).length,
 
-    reward: 0,
+    validReports: 0,
 
     averageReading:
       Math.round(averageReading),
@@ -70,6 +73,15 @@ export function generateYearlyReport(
         averageSleep * 10
       ) / 10,
 
+    totalHours: 0,
+
+    totalReward: 0,
+
+    bestMonth: "-",
+
+    topTarget: "-",
+
+    careerScore: 0,
   };
 
 }

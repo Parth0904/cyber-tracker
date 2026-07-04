@@ -11,6 +11,8 @@ import { Button } from "@/components/ui/Button";
 import { Badge } from "@/components/ui/Badge";
 import { EmptyState } from "@/components/ui/EmptyState";
 import { Progress } from "@/components/ui/Progress";
+import { Modal } from "@/components/ui/Modal";
+import TargetForm from "@/components/targets/form/TargetForm";
 
 // --- STRICT WORKSPACE COMPONENT TYPES ---
 type ScopeItem = { type: string; pattern: string; status: string };
@@ -34,6 +36,13 @@ type TargetDetailData = {
   reports: ReportItem[];
   timeline: TimelineItem[];
   notes: string;
+  archived?: number;
+  started_at?: string;
+  last_activity?: string;
+  category?: string;
+  scope_url?: string;
+  program_url?: string;
+  created_by?: string;
 };
 
 export default function TargetDetailsWorkspace() {
@@ -45,24 +54,105 @@ export default function TargetDetailsWorkspace() {
   const [data, setData] = React.useState<TargetDetailData | null>(null);
   const [activeTab, setActiveTab] = React.useState("overview");
   const [loading, setLoading] = React.useState(true);
+  const [isEditModalOpen, setIsEditModalOpen] = React.useState(false);
+
+  const fetchWorkspaceData = async () => {
+    try {
+      const res = await fetch(`/api/targets/${targetId}`);
+      if (res.ok) {
+        const json = await res.json();
+        setData(json);
+      }
+    } catch (err) {
+      console.error("Workspace synchronization vector failure:", err);
+    } finally {
+      setLoading(false);
+    }
+  };
 
   React.useEffect(() => {
     if (!targetId) return;
-    async function fetchWorkspaceData() {
-      try {
-        const res = await fetch(`/api/targets/${targetId}`);
-        if (res.ok) {
-          const json = await res.json();
-          setData(json);
-        }
-      } catch (err) {
-        console.error("Workspace synchronization vector failure:", err);
-      } finally {
-        setLoading(false);
-      }
-    }
     fetchWorkspaceData();
   }, [targetId]);
+
+  const handleUpdateTarget = async (formData: any) => {
+    try {
+      const res = await fetch(`/api/targets/${targetId}`, {
+        method: "PATCH",
+        headers: { "Content-Type": "application/json" },
+        body: JSON.stringify(formData)
+      });
+      if (res.ok) {
+        await fetchWorkspaceData();
+        setIsEditModalOpen(false);
+      }
+    } catch (err) {
+      console.error("Failed to update target details:", err);
+    }
+  };
+
+  const handleArchive = async () => {
+    try {
+      const res = await fetch(`/api/targets/${targetId}`, {
+        method: "PATCH",
+        headers: { "Content-Type": "application/json" },
+        body: JSON.stringify({ archived: 1, status: "Archived" })
+      });
+      if (res.ok) {
+        router.push("/targets");
+      }
+    } catch (err) {
+      console.error("Failed to archive target:", err);
+    }
+  };
+
+  const handleRestore = async () => {
+    try {
+      const res = await fetch(`/api/targets/${targetId}`, {
+        method: "PATCH",
+        headers: { "Content-Type": "application/json" },
+        body: JSON.stringify({ archived: 0, status: "Active" })
+      });
+      if (res.ok) {
+        await fetchWorkspaceData();
+      }
+    } catch (err) {
+      console.error("Failed to restore target:", err);
+    }
+  };
+
+  const handleDelete = async () => {
+    if (!confirm("Are you sure you want to delete this target workspace?")) return;
+    try {
+      const res = await fetch(`/api/targets/${targetId}`, {
+        method: "DELETE"
+      });
+      if (res.ok) {
+        router.push("/targets");
+      }
+    } catch (err) {
+      console.error("Failed to delete target:", err);
+    }
+  };
+
+  const handleSaveNotes = async () => {
+    if (!data) return;
+    try {
+      const res = await fetch(`/api/targets/${targetId}`, {
+        method: "PATCH",
+        headers: { "Content-Type": "application/json" },
+        body: JSON.stringify({
+          ...data,
+          notes: data.notes
+        })
+      });
+      if (res.ok) {
+        alert("Buffer notebook synced successfully.");
+      }
+    } catch (err) {
+      console.error("Failed to sync buffer notebook:", err);
+    }
+  };
 
   if (loading) {
     return (
@@ -126,6 +216,21 @@ export default function TargetDetailsWorkspace() {
             </Button>
             <Button variant="secondary" className="h-8 text-[11px] gap-1.5">
               <FileText size={12} /> Report
+            </Button>
+            <Button variant="secondary" className="h-8 text-[11px] gap-1.5" onClick={() => setIsEditModalOpen(true)}>
+              Edit Target
+            </Button>
+            {data.status === "Archived" || data.archived === 1 ? (
+              <Button variant="secondary" className="h-8 text-[11px] gap-1.5" onClick={handleRestore}>
+                Restore Target
+              </Button>
+            ) : (
+              <Button variant="secondary" className="h-8 text-[11px] gap-1.5 text-warning-amber" onClick={handleArchive}>
+                Archive Target
+              </Button>
+            )}
+            <Button variant="secondary" className="h-8 text-[11px] gap-1.5 text-danger-rose border-danger-rose/25" onClick={handleDelete}>
+              Delete Target
             </Button>
           </div>
         </div>
@@ -283,7 +388,7 @@ export default function TargetDetailsWorkspace() {
           <div className="space-y-4 animate-in fade-in duration-100">
             <div className="flex items-center justify-between border-b border-border-subtle pb-2">
               <h3 className="text-xs font-mono font-bold text-zinc-400 uppercase tracking-wider">// LOCAL_WORKSPACE_NOTEBOOK</h3>
-              <Button variant="secondary" className="h-6 text-[10px] px-2">Save Buffer</Button>
+              <Button variant="secondary" className="h-6 text-[10px] px-2" onClick={handleSaveNotes}>Save Buffer</Button>
             </div>
             <textarea
               className="w-full h-48 bg-black border border-border-subtle rounded-md p-3 text-xs font-mono text-zinc-300 focus:outline-none focus:border-accent-cyan resize-y leading-relaxed"
@@ -314,6 +419,35 @@ export default function TargetDetailsWorkspace() {
         )}
 
       </div>
+
+      {isEditModalOpen && (
+        <Modal 
+          isOpen={isEditModalOpen} 
+          onClose={() => setIsEditModalOpen(false)} 
+          title="Configure Target Workspace Parameters"
+        >
+          <TargetForm 
+            initialData={{
+              name: data.name,
+              platform: data.platform,
+              url: data.url || "",
+              status: data.status as any,
+              priority: data.priority as any,
+              started_at: data.started_at || new Date().toISOString(),
+              last_activity: data.last_activity || new Date().toISOString(),
+              notes: data.notes || "",
+              category: data.category || "",
+              scope_url: data.scope_url || "",
+              program_url: data.program_url || "",
+              created_by: data.created_by || "",
+              archived: data.archived || 0,
+            }} 
+            onSubmit={handleUpdateTarget} 
+            submitLabel="Sync Configurations"
+          />
+        </Modal>
+      )}
+
     </div>
   );
 }

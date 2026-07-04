@@ -1,4 +1,4 @@
-import Panel from "@/components/ui/Panel";
+import { Panel } from "@/components/ui/Panel";
 import ScoreLineChart from "@/components/charts/LineChart";
 
 type Point = {
@@ -13,6 +13,11 @@ type Props = {
 export default function WeeklyTrend({
   trend,
 }: Props) {
+  const chartData = trend.map((p) => ({
+    label: p.date,
+    value: p.score,
+  }));
+
   return (
     <Panel>
 
@@ -28,7 +33,7 @@ export default function WeeklyTrend({
 
       </div>
 
-      <ScoreLineChart data={trend} />
+      <ScoreLineChart data={chartData} />
 
     </Panel>
   );

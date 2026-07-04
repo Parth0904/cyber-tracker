@@ -28,14 +28,15 @@ export function generateWeeklyReport(
   });
 
   return {
-
-    startDate: weekAgo.toISOString().split("T")[0],
-
-    endDate: today.toISOString().split("T")[0],
+    week: `${weekAgo.toISOString().split("T")[0]} to ${today.toISOString().split("T")[0]}`,
 
     averageScore: 0,
 
     totalActivities: activities.length,
+
+    totalSessions: 0,
+
+    totalTargets: activities.filter(a => a.type === "target").length,
 
     learning:
       activities.filter(a => a.type === "learning").length,
@@ -43,14 +44,17 @@ export function generateWeeklyReport(
     recon:
       activities.filter(a => a.type === "recon").length,
 
-    targets:
-      activities.filter(a => a.type === "target").length,
+    testing: 0,
+
+    reporting: 0,
 
     findings:
       activities.filter(a => a.type === "finding").length,
 
     reports:
       activities.filter(a => a.type === "bug_report").length,
+
+    validReports: 0,
 
     averageReading:
       entries.length === 0
@@ -75,13 +79,11 @@ export function generateWeeklyReport(
             ) * 10
           ) / 10,
 
-    completedDays:
-      entries.filter(
-        e =>
-          e.sleep_hours >= 7 &&
-          e.reading >= 30
-      ).length,
+    totalHours: 0,
 
+    productivity: "Neutral",
+
+    recommendation: "Maintain target scanning velocity.",
   };
 
 }

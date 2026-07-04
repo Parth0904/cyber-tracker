@@ -2,7 +2,7 @@
 
 import { useState } from "react";
 
-import Button from "@/components/ui/Button";
+import { Button } from "@/components/ui/Button";
 
 import TargetInfo from "./TargetInfo";
 import TargetProgram from "./TargetProgram";
@@ -53,19 +53,19 @@ export default function TargetForm({
       <TargetInfo
         name={target.name}
         platform={target.platform}
-        onChange={update}
+        onChange={(field, value) => update(field as any, value)}
       />
 
       <TargetProgram
-        scope_url={target.scope_url}
-        program_url={target.program_url}
-        onChange={update}
+        scope_url={target.scope_url ?? ""}
+        program_url={target.program_url ?? ""}
+        onChange={(field, value) => update(field as any, value)}
       />
 
       <TargetStatus
         status={target.status}
         priority={target.priority}
-        onChange={update}
+        onChange={(field, value) => update(field as any, value)}
       />
 
       <TargetNotes

@@ -36,6 +36,7 @@ type TargetData = {
   sessions: SessionItem[];
   findings: FindingItem[];
   timeline: TimelineItem[];
+  archived?: number;
 };
 
 export default function TargetsPage() {
@@ -49,19 +50,20 @@ export default function TargetsPage() {
   const [selectedTarget, setSelectedTarget] = React.useState<TargetData | null>(null);
   const [activeWorkspaceTab, setActiveWorkspaceTab] = React.useState("overview");
 
+  const loadPrograms = async () => {
+    try {
+      const response = await fetch("/api/targets");
+      if (response.ok) {
+        const data = await response.json();
+        setTargets(data || []);
+      }
+    } catch (err) {
+      console.error("Failed to load targets workspace matrix:", err);
+    }
+  };
+
   // Fetch initial collection data values directly from your api route layer
   React.useEffect(() => {
-    async function loadPrograms() {
-      try {
-        const response = await fetch("/api/targets");
-        if (response.ok) {
-          const data = await response.json();
-          setTargets(data || []);
-        }
-      } catch (err) {
-        console.error("Failed to load targets workspace matrix:", err);
-      }
-    }
     loadPrograms();
   }, []);
 
@@ -72,8 +74,8 @@ export default function TargetsPage() {
     return matchesSearch && matchesPlatform;
   });
 
-  const activeTargets = filteredTargets.filter(t => t.status !== "Archived");
-  const archivedTargets = filteredTargets.filter(t => t.status === "Archived");
+  const activeTargets = filteredTargets.filter(t => t.status !== "Archived" && t.archived !== 1);
+  const archivedTargets = filteredTargets.filter(t => t.status === "Archived" || t.archived === 1);
 
   const getPriorityColor = (p: string) => {
     if (p === "P1") return "danger";
@@ -146,7 +148,7 @@ export default function TargetsPage() {
                   <div>
                     <div className="flex items-start justify-between gap-2">
                       <div>
-                        <h3 className="text-xs font-semibold text-white group-hover:text-accent-cyan transition-colors truncate max-w-[180px]">
+                        <h3 className="text-xs font-semibold text-white group-hover:text-accent-cyan transition-colors truncate max-w-45">
                           {target.name}
                         </h3>
                         <span className="text-[10px] font-mono text-zinc-500 uppercase">{target.platform}</span>
@@ -193,6 +195,30 @@ export default function TargetsPage() {
               <h2 className="text-xs font-mono font-bold tracking-wider uppercase text-zinc-600 flex items-center gap-2">
                 <Archive className="w-3.5 h-3.5" /> Vaulted / Archived Targets ({archivedTargets.length})
               </h2>
+              <div className="grid grid-cols-1 md:grid-cols-2 lg:grid-cols-3 gap-4 opacity-70">
+                {archivedTargets.map(target => (
+                  <div 
+                    key={target.id}
+                    onClick={() => { setSelectedTarget(target); setActiveWorkspaceTab("overview"); }}
+                    className="group bg-card border border-border-subtle rounded-lg p-4 space-y-4 hover:border-accent-cyan transition-all duration-200 cursor-pointer flex flex-col justify-between animate-in fade-in duration-100"
+                  >
+                    <div>
+                      <div className="flex items-start justify-between gap-2">
+                        <div>
+                          <h3 className="text-xs font-semibold text-white group-hover:text-accent-cyan transition-colors truncate max-w-45">
+                            {target.name}
+                          </h3>
+                          <span className="text-[10px] font-mono text-zinc-500 uppercase">{target.platform}</span>
+                        </div>
+                        <div className="flex gap-1.5 items-center">
+                          <Badge variant={getPriorityColor(target.priority)}>{target.priority}</Badge>
+                          <Badge variant="neutral">{target.status}</Badge>
+                        </div>
+                      </div>
+                    </div>
+                  </div>
+                ))}
+              </div>
             </div>
           )}
         </div>
@@ -205,6 +231,7 @@ export default function TargetsPage() {
           activeTab={activeWorkspaceTab}
           setActiveTab={setActiveWorkspaceTab}
           onClose={() => setSelectedTarget(null)} 
+          onRefresh={loadPrograms}
         />
       )}
     </div>
@@ -212,7 +239,59 @@ export default function TargetsPage() {
 }
 
 // --- INTERNAL EMBEDDED REPO SIDE PANEL COMPONENT ---
-function TargetWorkspacePanel({ target, activeTab, setActiveTab, onClose }: { target: any; activeTab: string; setActiveTab: (t: string) => void; onClose: () => void }) {
+function TargetWorkspacePanel({ 
+  target, 
+  activeTab, 
+  setActiveTab, 
+  onClose,
+  onRefresh
+}: { 
+  target: any; 
+  activeTab: string; 
+  setActiveTab: (t: string) => void; 
+  onClose: () => void;
+  onRefresh: () => void;
+}) {
+  const router = useRouter();
+
+  const handleArchive = async (e: React.MouseEvent) => {
+    e.stopPropagation();
+    const res = await fetch(`/api/targets/${target.id}`, {
+      method: "PATCH",
+      headers: { "Content-Type": "application/json" },
+      body: JSON.stringify({ archived: 1, status: "Archived" })
+    });
+    if (res.ok) {
+      onRefresh();
+      onClose();
+    }
+  };
+
+  const handleRestore = async (e: React.MouseEvent) => {
+    e.stopPropagation();
+    const res = await fetch(`/api/targets/${target.id}`, {
+      method: "PATCH",
+      headers: { "Content-Type": "application/json" },
+      body: JSON.stringify({ archived: 0, status: "Active" })
+    });
+    if (res.ok) {
+      onRefresh();
+      onClose();
+    }
+  };
+
+  const handleDelete = async (e: React.MouseEvent) => {
+    e.stopPropagation();
+    if (!confirm("Are you sure you want to delete this target?")) return;
+    const res = await fetch(`/api/targets/${target.id}`, {
+      method: "DELETE"
+    });
+    if (res.ok) {
+      onRefresh();
+      onClose();
+    }
+  };
+
   const tabs = [
     { id: "overview", label: "Code & Scope" },
     { id: "sessions", label: "Recon Sessions" },
@@ -231,6 +310,35 @@ function TargetWorkspacePanel({ target, activeTab, setActiveTab, onClose }: { ta
           <a href={target.url} target="_blank" rel="noreferrer" className="inline-flex items-center gap-1 text-[10px] font-mono text-accent-cyan mt-1 hover:underline">
             <span>{target.url}</span> <ExternalLink className="w-2.5 h-2.5" />
           </a>
+          <div className="flex items-center gap-2 mt-3 font-mono text-[9px]">
+            <button 
+              onClick={() => router.push(`/targets/${target.id}/edit`)} 
+              className="bg-accent-cyan/15 hover:bg-accent-cyan/30 text-accent-cyan border border-accent-cyan/20 px-2 py-0.5 rounded transition-all cursor-pointer"
+            >
+              OPEN WORKSPACE //
+            </button>
+            {target.status === "Archived" || target.archived === 1 ? (
+              <button 
+                onClick={handleRestore} 
+                className="bg-success-emerald/15 hover:bg-success-emerald/30 text-success-emerald border border-success-emerald/20 px-2 py-0.5 rounded transition-all cursor-pointer"
+              >
+                RESTORE //
+              </button>
+            ) : (
+              <button 
+                onClick={handleArchive} 
+                className="bg-warning-amber/15 hover:bg-warning-amber/30 text-warning-amber border border-warning-amber/20 px-2 py-0.5 rounded transition-all cursor-pointer"
+              >
+                ARCHIVE //
+              </button>
+            )}
+            <button 
+              onClick={handleDelete} 
+              className="bg-danger-rose/15 hover:bg-danger-rose/30 text-danger-rose border border-danger-rose/20 px-2 py-0.5 rounded transition-all cursor-pointer"
+            >
+              DELETE //
+            </button>
+          </div>
         </div>
         <button onClick={onClose} className="p-1.5 rounded-md border border-border-subtle hover:bg-zinc-900 transition-colors text-zinc-400 hover:text-white">
           <X className="w-4 h-4" />
@@ -242,7 +350,7 @@ function TargetWorkspacePanel({ target, activeTab, setActiveTab, onClose }: { ta
           <button
             key={tab.id}
             onClick={() => setActiveTab(tab.id)}
-            className={`py-2.5 px-3 text-xs font-medium transition-all border-b-2 relative -mb-[1px] whitespace-nowrap
+            className={`py-2.5 px-3 text-xs font-medium transition-all border-b-2 relative -mb-px whitespace-nowrap
               ${activeTab === tab.id ? "border-accent-cyan text-white font-semibold" : "border-transparent text-zinc-500 hover:text-zinc-300"}`}
           >
             {tab.label}
@@ -344,7 +452,7 @@ function TargetWorkspacePanel({ target, activeTab, setActiveTab, onClose }: { ta
         )}
 
         {activeTab === "timeline" && (
-          <div className="space-y-4 relative before:absolute before:left-2 before:top-2 before:bottom-2 before:w-[1px] before:bg-border-subtle animate-in fade-in duration-100 pl-6">
+          <div className="space-y-4 relative before:absolute before:left-2 before:top-2 before:bottom-2 before:w-px before:bg-border-subtle animate-in fade-in duration-100 pl-6">
             {(target.timeline || []).length === 0 ? (
               <div className="text-center font-mono text-[10px] text-zinc-600 py-6 -ml-6">// NO_TIMELINE_EVENTS</div>
             ) : (

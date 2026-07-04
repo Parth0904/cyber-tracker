@@ -1,4 +1,5 @@
-import Input from "@/components/ui/Input";
+import * as React from "react";
+import { Input } from "@/components/ui/Input";
 
 type Props = {
   name: string;
@@ -17,7 +18,7 @@ export default function TargetInfo({
       <Input
         placeholder="Target Name"
         value={name}
-        onChange={(e) =>
+        onChange={(e: React.ChangeEvent<HTMLInputElement>) =>
           onChange("name", e.target.value)
         }
       />
@@ -25,7 +26,7 @@ export default function TargetInfo({
       <Input
         placeholder="Platform (HackerOne, Bugcrowd...)"
         value={platform}
-        onChange={(e) =>
+        onChange={(e: React.ChangeEvent<HTMLInputElement>) =>
           onChange("platform", e.target.value)
         }
       />

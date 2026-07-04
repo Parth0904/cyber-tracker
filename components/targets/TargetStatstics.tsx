@@ -7,7 +7,7 @@ import {
 
 import StatGrid from "@/components/ui/StatGrid";
 
-import MetricCard from "@/components/ui/MetricCard";
+import { MetricCard } from "@/components/ui/MetricCard";
 
 type Props = {
 

@@ -29,7 +29,6 @@ export default function CompletionCard({
 
         <Progress
           value={percent}
-          max={100}
         />
 
         <div>

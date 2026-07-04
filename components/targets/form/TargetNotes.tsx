@@ -1,4 +1,5 @@
-import Textarea from "@/components/ui/Textarea";
+import * as React from "react";
+import { Textarea } from "@/components/ui/Textarea";
 
 type Props = {
   notes: string;
@@ -14,7 +15,7 @@ export default function TargetNotes({
       rows={8}
       placeholder="Notes..."
       value={notes}
-      onChange={(e) =>
+      onChange={(e: React.ChangeEvent<HTMLTextAreaElement>) =>
         onChange(e.target.value)
       }
     />

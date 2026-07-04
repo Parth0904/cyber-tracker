@@ -21,27 +21,20 @@ import {
   DailyEntry,
 } from "@/lib/types";
 
-type HistoryDay = {
+export type HistoryTimelineItem = {
+  id: string;
   date: string;
-  score: number;
-  completion: number;
-  productivity: ReturnType<typeof evaluateDay>;
-  daily: DailyEntry;
-  activities: {
-    learning: number;
-    bug_report: number;
-    recon: number;
-    target: number;
-    finding: number;
-  };
-  focus: ReturnType<typeof generateInsights>["focus"];
-  insights: ReturnType<typeof generateInsights>["insights"];
+  time: string;
+  title: string;
+  description: string;
+  type: string;
+  meta: string;
 };
 
 export function generateHistoryTimeline(
   entries: DailyEntry[],
   activities: ActivityRow[]
-): HistoryDay[] {
+): HistoryTimelineItem[] {
 
   const averageScore =
     calculateAverageDailyScore(

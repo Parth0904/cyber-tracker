@@ -1,4 +1,4 @@
-import Badge from "@/components/ui/Badge";
+import { Badge } from "@/components/ui/Badge";
 
 type Props = {
   status:
@@ -13,21 +13,20 @@ export default function TargetStatusBadge({
   status,
 }: Props) {
 
-  const color =
+  const variant =
     status === "Completed"
-      ? "green"
+      ? "success"
       : status === "Reporting"
-      ? "blue"
+      ? "cyan"
       : status === "Testing"
-      ? "yellow"
+      ? "warning"
       : status === "Paused"
-      ? "gray"
-      : "red";
+      ? "neutral"
+      : "danger";
 
   return (
-    <Badge
-      text={status}
-      color={color}
-    />
+    <Badge variant={variant}>
+      {status}
+    </Badge>
   );
 }

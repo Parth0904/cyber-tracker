@@ -18,7 +18,8 @@ type SessionLog = {
   end: string;
   ended_at?: string | null;
   durationHours: number;
-  status: "Completed" | "Aborted";
+  status: "Running" | "Completed" | "Aborted";
+  isActive: boolean;
 };
 
 export default function SessionsPage() {

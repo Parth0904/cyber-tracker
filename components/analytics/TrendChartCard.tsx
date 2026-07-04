@@ -10,10 +10,15 @@ type Props = {
 export default function TrendChartCard({
   trend,
 }: Props) {
+  const chartData = trend.map((p) => ({
+    label: p.date,
+    value: p.score,
+  }));
+
   return (
     <Card title="Productivity Trend">
       <ScoreLineChart
-        data={trend}
+        data={chartData}
       />
     </Card>
   );
