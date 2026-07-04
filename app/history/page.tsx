@@ -1,196 +1,122 @@
 "use client";
 
-import { useEffect, useMemo, useState } from "react";
+import * as React from "react";
+import { History, LayoutGrid, FileText } from "lucide-react";
+import { Panel } from "@/components/ui/Panel";
+import { EmptyState } from "@/components/ui/EmptyState";
+import HistorySearch from "@/components/history/HistorySearch";
+import HistoryFilters from "@/components/history/HistoryFilters";
+import HistoryTimeline from "@/components/history/HistoryTimeline";
 
-import SectionHeader from "@/app/components/common/SectionHeader";
+// --- STRICT WORKSPACE COMPONENT ENGINE TYPES ---
+type AuditRecordNode = {
+  id: string;
+  date: string;
+  time: string;
+  title: string;
+  description: string;
+  type: "target" | "habit" | "system";
+  meta?: string;
+};
 
-import HistorySummary from "@/app/components/history/HistorySummary";
-import HistoryFilters from "@/app/components/history/HistoryFilters";
-import HistorySearch from "@/app/components/history/HistorySearch";
-import HistoryTimeline from "@/app/components/history/HistoryTimeline";
-import HistoryCard from "@/app/components/history/HistoryCard";
+export default function HistoryMasterLogPage() {
+  // --- TELEMETRY STATE PIPELINE (No placeholders, starts clean) ---
+  const [records, setRecords] = React.useState<AuditRecordNode[]>([]);
+  const [search, setSearch] = React.useState("");
+  const [category, setCategory] = React.useState("all");
+  const [loading, setLoading] = React.useState(true);
 
-import {
-  HistoryDay,
-  HistorySummary as HistorySummaryType,
-} from "@/lib/history/";
-
-export default function HistoryPage() {
-  const [history, setHistory] = useState<
-    HistoryDay[]
-  >([]);
-
-  const [summary, setSummary] =
-    useState<HistorySummaryType | null>(
-      null
-    );
-
-  const [loading, setLoading] =
-    useState(true);
-
-  const [search, setSearch] =
-    useState("");
-
-  const [filter, setFilter] =
-    useState("all");
-
-  useEffect(() => {
-    async function load() {
-      setLoading(true);
-
-      const [historyRes, summaryRes] =
-        await Promise.all([
-          fetch("/api/history"),
-          fetch("/api/history/summary"),
-        ]);
-
-      setHistory(
-        await historyRes.json()
-      );
-
-      setSummary(
-        await summaryRes.json()
-      );
-
-      setLoading(false);
+  React.useEffect(() => {
+    async function synchronizeHistoryLogs() {
+      try {
+        const res = await fetch("/api/history");
+        if (res.ok) {
+          const data = await res.json();
+          // Extract arrays safely with structural fallbacks
+          setRecords(Array.isArray(data) ? data : data.items || []);
+        }
+      } catch (err) {
+        console.error("Master audit log synchronization failure:", err);
+      } finally {
+        setLoading(false);
+      }
     }
-
-    load();
+    synchronizeHistoryLogs();
   }, []);
 
-  const filteredHistory =
-    useMemo(() => {
+  const handleClearFilters = () => {
+    setSearch("");
+    setCategory("all");
+  };
 
-      let data = [...history];
+  const handleRecordSelection = (item: AuditRecordNode) => {
+    // Utility hooks for deep visual routing or drawer inspection layers
+    console.log("Selected operational audit hash:", item.id);
+  };
 
-      if (filter !== "all") {
+  // Safe layout query filter tracking matrix computations
+  const filteredRecords = records.filter((rec) => {
+    const query = search.toLowerCase();
+    const matchesSearch = 
+      rec.title?.toLowerCase().includes(query) || 
+      rec.description?.toLowerCase().includes(query) || 
+      rec.meta?.toLowerCase().includes(query);
+      
+    const matchesCategory = category === "all" || rec.type === category;
+    
+    return matchesSearch && matchesCategory;
+  });
 
-        const now = new Date();
-
-        const days =
-          filter === "week"
-            ? 7
-            : filter === "month"
-            ? 30
-            : 365;
-
-        data = data.filter((day) => {
-
-          const diff =
-            (now.getTime() -
-              new Date(
-                day.date
-              ).getTime()) /
-            86400000;
-
-          return diff <= days;
-        });
-
-      }
-
-      if (search.trim()) {
-
-        const value =
-          search.toLowerCase();
-
-        data = data.filter((day) =>
-
-          day.date
-            .toLowerCase()
-            .includes(value) ||
-
-          day.daily.notes
-            ?.toLowerCase()
-            .includes(value)
-
-        );
-
-      }
-
-      return data;
-
-    }, [history, search, filter]);
-
-  if (loading || !summary) {
-
+  if (loading) {
     return (
-      <main className="min-h-screen bg-slate-950 flex items-center justify-center text-slate-400">
-        Loading history...
-      </main>
+      <div className="flex items-center justify-center min-h-[400px] font-mono text-xs text-zinc-500 uppercase tracking-widest animate-pulse">
+        // RETRIEVING_SECURE_AUDIT_LOGS_TRAILS...
+      </div>
     );
-
   }
 
   return (
-    <main className="min-h-screen bg-slate-950 text-slate-100">
-
-      <div className="max-w-7xl mx-auto px-6 py-10">
-
-        <SectionHeader
-          title="History"
-          subtitle="Review your past performance, habits and productivity."
-        />
-
-        <HistorySummary
-          trackedDays={
-            summary.totalDays
-          }
-          averageScore={
-            summary.averageScore
-          }
-          bestScore={
-            summary.highestScore
-          }
-        />
-
-        <div className="mt-8 flex flex-col gap-4">
-
-          <HistorySearch
-            value={search}
-            onChange={setSearch}
-          />
-
-          <HistoryFilters
-            value={filter}
-            onChange={setFilter}
-          />
-
+    <div className="max-w-7xl mx-auto px-4 py-6 space-y-6 text-zinc-200">
+      
+      {/* HEADER CONTROLS NAVIGATION */}
+      <div className="flex flex-col sm:flex-row sm:items-center justify-between gap-4 border-b border-border-subtle pb-5">
+        <div>
+          <h1 className="text-sm font-semibold tracking-tight text-white uppercase font-mono flex items-center gap-2">
+            <History className="w-4 h-4 text-accent-cyan" /> Master Audit Log Index
+          </h1>
+          <p className="text-[11px] text-zinc-500 mt-0.5">
+            Search, filter, and review historical target recon sessions, daily targets status changes, and automated logs.
+          </p>
         </div>
-
-        <div className="mt-8">
-
-          <HistoryTimeline>
-
-            {filteredHistory.length ===
-            0 ? (
-
-              <div className="text-center py-12 text-slate-500">
-
-                No history found.
-
-              </div>
-
-            ) : (
-
-              filteredHistory.map(
-                (day) => (
-
-                  <HistoryCard
-                    key={day.date}
-                    day={day}
-                  />
-
-                )
-              )
-
-            )}
-
-          </HistoryTimeline>
-
-        </div>
-
       </div>
 
-    </main>
+      {/* FILTER SEARCH MODULE WRAPPER HUB */}
+      <div className="space-y-3 bg-black border border-border-subtle p-4 rounded-lg">
+        <HistorySearch value={search} onChange={setSearch} />
+        <HistoryFilters 
+          currentCategory={category} 
+          onCategoryChange={setCategory} 
+          onClearAll={handleClearFilters} 
+        />
+      </div>
+
+      {/* DYNAMIC SCROLLABLE TIMELINE RUNWAY */}
+      <Panel>
+        {records.length === 0 ? (
+          <EmptyState 
+            title="Operational Logs Empty" 
+            description="No global logging files could be found. Complete metrics or session items to populate indices."
+          />
+        ) : (
+          <div className="pt-2">
+            <HistoryTimeline 
+              items={filteredRecords} 
+              onItemSelect={handleRecordSelection} 
+            />
+          </div>
+        )}
+      </Panel>
+
+    </div>
   );
 }

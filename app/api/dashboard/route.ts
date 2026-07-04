@@ -14,7 +14,7 @@ import {
   generateDashboard,
 } from "@/lib/dashboard";
 
-import { DailyEntry, ActivityRow } from "@/lib/types";
+import { DailyEntry } from "@/lib/types";
 
 export async function GET() {
 
@@ -45,7 +45,7 @@ export async function GET() {
 
       getEntries("all"),
 
-      (getTodayActivities(today) as ActivityRow[]),
+      getTodayActivities(today),
 
       getActivities("all")
 

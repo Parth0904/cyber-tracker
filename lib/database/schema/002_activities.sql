@@ -1,0 +1,11 @@
+CREATE TABLE IF NOT EXISTS activities (
+
+id INTEGER PRIMARY KEY AUTOINCREMENT,
+
+date TEXT,
+
+type TEXT,
+
+created_at TEXT
+
+);

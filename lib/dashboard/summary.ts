@@ -59,17 +59,77 @@ export function generateDashboard(
     allActivities,
     todayEntry
   );
+return {
 
-  return {
+  completion,
 
-    completion,
+  productivity: {
 
-    productivity,
+    score: todayScore,
 
-    focus,
+    level: productivity.level,
 
-    insights,
+    reason: Array.isArray(productivity.reason)
+      ? productivity.reason.join(" ")
+      : productivity.reason,
 
-  };
+    contributors: productivity.contributors,
 
+  },
+
+  focus,
+
+  insights,
+
+  updatedAt: new Date().toLocaleTimeString(),
+
+  streak: {
+
+    current: 0,
+
+  },
+
+  todayActivities: todayActivities.map(activity => ({
+
+    type: activity.type,
+
+  })),
+
+  activeTarget: {
+
+    name: "No Active Target",
+
+    status: "Recon",
+
+    hours: 0,
+
+    findings: 0,
+
+    reports: 0,
+
+  },
+
+  currentSession: {
+
+    active: false,
+
+    type: "",
+
+    target: "",
+
+    duration: "00:00:00",
+
+  },
+
+  weeklyTrend: [],
+
+  recentActivity: todayActivities.map(activity => ({
+
+    type: activity.type,
+
+    time: "Today",
+
+  })),
+
+};
 }

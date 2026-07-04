@@ -3,6 +3,7 @@ import {
   saveDailyEntry,
 } from "@/lib/repositories/dailyEntries";
 import { NextResponse } from "next/server";
+import { mapDailyFormToEntry } from "@/lib/mappers/dailyEntry";
 
 export async function GET() {
     const today = new Date().toISOString().split("T")[0];
@@ -19,10 +20,12 @@ export async function POST(req: Request) {
   const today =
     new Date().toISOString().split("T")[0];
 
-  saveDailyEntry({
-  date: today,
-  ...body,
-});
+saveDailyEntry(
+  mapDailyFormToEntry(
+    today,
+    body
+  )
+);
 
   return NextResponse.json({
     success: true,

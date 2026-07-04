@@ -4,34 +4,46 @@ import {
   getEntries,
 } from "@/lib/repositories/dailyEntries";
 
-import {
-  getActivities,
-} from "@/lib/repositories/activities";
+export async function GET(
+  req: Request
+) {
 
-import {
-  generateHistoryTimeline,
-  generateHistorySummary,
-} from "@/lib/history";
+  const { searchParams } =
+    new URL(req.url);
 
-export async function GET() {
+  const scope =
+    searchParams.get("scope");
 
   const entries =
     getEntries("all");
 
-  const activities =
-    getActivities("all");
+  if (scope === "yesterday") {
 
-  const history =
-    generateHistoryTimeline(
-      entries,
-      activities
+    const yesterday =
+      new Date();
+
+    yesterday.setDate(
+      yesterday.getDate() - 1
     );
 
-  const summary =
-    generateHistorySummary(
-      history
+    const yesterdayKey =
+      yesterday
+        .toISOString()
+        .split("T")[0];
+
+    const entry =
+      entries.find(
+        e => e.date === yesterdayKey
+      );
+
+    return NextResponse.json(
+      entry ?? {}
     );
 
-  return NextResponse.json(summary);
+  }
+
+  return NextResponse.json({
+    entries,
+  });
 
 }

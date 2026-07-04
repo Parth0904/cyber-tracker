@@ -1,4 +1,6 @@
-import db from "@/lib/db";
+import {
+  many,
+} from "@/lib/database";
 
 import {
   ActivityRow,
@@ -10,28 +12,29 @@ import {
 
 export function getTodayActivities(
   date: string
-) {
-  return db
-    .prepare(
-      `
+): ActivityRow[] {
+
+  return many<ActivityRow>(
+    `
       SELECT *
       FROM activities
       WHERE date = ?
-    `
-    )
-    .all(date);
+    `,
+    date
+  );
+
 }
 
-export function getAllActivities() {
-  return db
-    .prepare(
-      `
+export function getAllActivities(): ActivityRow[] {
+
+  return many<ActivityRow>(
+    `
       SELECT *
       FROM activities
       ORDER BY date ASC
     `
-    )
-    .all();
+  );
+
 }
 
 export function getActivities(
@@ -39,7 +42,7 @@ export function getActivities(
 ): ActivityRow[] {
 
   if (range === "all") {
-    return getAllActivities() as ActivityRow[];
+    return getAllActivities();
   }
 
   const days = {
@@ -48,14 +51,14 @@ export function getActivities(
     year: 365,
   }[range];
 
-  return db
-    .prepare(
-      `
+  return many<ActivityRow>(
+    `
       SELECT *
       FROM activities
       WHERE date >= date('now', ?)
       ORDER BY date ASC
-    `
-    )
-    .all(`-${days} days`) as ActivityRow[];
+    `,
+    `-${days} days`
+  );
+
 }

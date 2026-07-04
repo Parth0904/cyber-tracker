@@ -102,22 +102,25 @@ export function generateHistoryTimeline(
   entry
 );
 
-      return {
+     return {
+
+  id: entry.date,
+
   date: entry.date,
 
-  score,
+  time: entry.bed_time ?? "--:--",
 
-  completion,
+  title: `Daily Summary • ${productivity.level}`,
 
-  productivity,
+  description: `${completion}% completion • ${score} productivity score`,
 
-  daily: entry,
+  type: "habit",
 
-  activities: activityCounts,
+  meta:
+    `Learning ${activityCounts.learning} • ` +
+    `Recon ${activityCounts.recon} • ` +
+    `Findings ${activityCounts.finding}`,
 
-  focus,
-
-  insights,
 };
 
     })

@@ -6,3 +6,5 @@ export * from "./records";
 export * from "./heatmap";
 export * from "./reports";
 export * from "./habitRanking";
+export * from "./streak";
+export * from "./productiveHours";

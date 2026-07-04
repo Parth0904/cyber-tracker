@@ -6,12 +6,19 @@
     "dev": "next dev",
     "build": "next build",
     "start": "next start",
-    "lint": "eslint"
+    "lint": "eslint",
+    "migrate": "tsx scripts/migrate.ts",
+    "reset": "tsx lib/database/reset.ts",
+    "seed": "tsx lib/database/seed.ts",
+    "backup": "tsx lib/database/backup.ts"
   },
   "dependencies": {
     "better-sqlite3": "^12.10.0",
+    "date-fns": "^4.4.0",
+    "lucide-react": "^1.23.0",
     "next": "^16.2.9",
     "react": "^19.2.7",
+    "react-calendar-heatmap": "^1.10.0",
     "react-dom": "^19.2.7",
     "recharts": "^3.9.1"
   },
