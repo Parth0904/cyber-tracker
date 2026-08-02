@@ -4,14 +4,14 @@ import {
   terminateSession,
 } from "@/lib/repositories/targetSessions";
 
-export function startSession(
+export async function startSession(
   targetId: number,
   type: "Recon" | "Testing" | "Reporting",
   description = ""
 ) {
 
   const active =
-    getCurrentSession();
+    await getCurrentSession();
 
   if (active) {
     throw new Error(
@@ -19,7 +19,7 @@ export function startSession(
     );
   }
 
-  return createSession(
+  return await createSession(
     targetId,
     type,
     description
@@ -27,10 +27,10 @@ export function startSession(
 
 }
 
-export function stopSession() {
+export async function stopSession() {
 
   const active =
-    getCurrentSession();
+    await getCurrentSession();
 
   if (!active) {
     throw new Error(
@@ -38,7 +38,7 @@ export function stopSession() {
     );
   }
 
-  return terminateSession(
+  return await terminateSession(
     active.id
   );
 

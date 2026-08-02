@@ -6,9 +6,8 @@ import {
 
 import { Target } from "@/lib/targets/index";
 
-export function getAllTargets(): Target[] {
-
-  return many<Target>(
+export async function getAllTargets(): Promise<Target[]> {
+  return await many<Target>(
     `
       SELECT *
       FROM targets
@@ -16,14 +15,12 @@ export function getAllTargets(): Target[] {
       ORDER BY started_at DESC
     `
   );
-
 }
 
-export function getTarget(
+export async function getTarget(
   id: number
-): Target | undefined {
-
-  return one<Target>(
+): Promise<Target | undefined> {
+  return await one<Target>(
     `
       SELECT *
       FROM targets
@@ -31,96 +28,80 @@ export function getTarget(
     `,
     id
   );
-
 }
 
-export function createTarget(
+export async function createTarget(
   target: Omit<Target, "id">
 ) {
+  const platform = target.platform ?? "General";
+  const url = target.url ?? "";
+  const status = target.status ?? "Active";
+  const priority = target.priority ?? "Medium";
+  const started_at = target.started_at ?? new Date().toISOString();
+  const last_activity = target.last_activity ?? new Date().toISOString();
+  const notes = target.notes ?? "";
 
-  return execute(
+  return await execute(
     `
       INSERT INTO targets (
-
         name,
-
         platform,
-
         url,
-
         status,
-
         priority,
-
         started_at,
-
         last_activity,
-
         notes
-
       )
-
       VALUES (?, ?, ?, ?, ?, ?, ?, ?)
     `,
     target.name,
-    target.platform,
-    target.url,
-    target.status,
-    target.priority,
-    target.started_at,
-    target.last_activity,
-    target.notes
+    platform,
+    url,
+    status,
+    priority,
+    started_at,
+    last_activity,
+    notes
   );
-
 }
 
-export function updateTarget(
+export async function updateTarget(
   id: number,
   target: Omit<Target, "id">
 ) {
-
-  return execute(
+  return await execute(
     `
       UPDATE targets
-
       SET
-
-        name = ?,
-
-        platform = ?,
-
-        url = ?,
-
-        status = ?,
-
-        priority = ?,
-
-        started_at = ?,
-
-        last_activity = ?,
-
-        notes = ?
-
+        name = ?
       WHERE id = ?
     `,
     target.name,
-    target.platform,
-    target.url,
-    target.status,
-    target.priority,
-    target.started_at,
-    target.last_activity,
-    target.notes,
+    id
+  );
+}
+
+export async function deleteTarget(
+  id: number
+) {
+  await execute(
+    `
+      DELETE FROM target_findings
+      WHERE target_id = ?
+    `,
     id
   );
 
-}
+  await execute(
+    `
+      DELETE FROM target_sessions
+      WHERE target_id = ?
+    `,
+    id
+  );
 
-export function deleteTarget(
-  id: number
-) {
-
-  return execute(
+  return await execute(
     `
       DELETE
       FROM targets
@@ -128,14 +109,12 @@ export function deleteTarget(
     `,
     id
   );
-
 }
 
-export function archiveTarget(
+export async function archiveTarget(
   id: number
 ) {
-
-  return execute(
+  return await execute(
     `
       UPDATE targets
       SET archived = 1
@@ -143,14 +122,12 @@ export function archiveTarget(
     `,
     id
   );
-
 }
 
-export function restoreTarget(
+export async function restoreTarget(
   id: number
 ) {
-
-  return execute(
+  return await execute(
     `
       UPDATE targets
       SET archived = 0
@@ -158,11 +135,10 @@ export function restoreTarget(
     `,
     id
   );
-
 }
 
-export function getAllTargetsWithArchived(): Target[] {
-  return many<Target>(
+export async function getAllTargetsWithArchived(): Promise<Target[]> {
+  return await many<Target>(
     `
       SELECT *
       FROM targets

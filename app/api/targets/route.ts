@@ -8,11 +8,20 @@ import {
   createNewTarget,
 } from "@/lib/services/target";
 
-export async function GET() {
+import {
+  generateTargetStatistics,
+} from "@/lib/targets/statistics";
 
-  return NextResponse.json(
-    getAllTargets()
+export async function GET() {
+  const targets = await getAllTargets();
+  const withStats = await Promise.all(
+    targets.map(async (t) => ({
+      ...t,
+      stats: await generateTargetStatistics(t.id),
+    }))
   );
+
+  return NextResponse.json(withStats);
 
 }
 
@@ -25,7 +34,7 @@ export async function POST(
 
   console.log(body);
 
-  createNewTarget(body);
+  await createNewTarget(body);
 
   return NextResponse.json({
 

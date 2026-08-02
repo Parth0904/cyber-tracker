@@ -1,44 +1,32 @@
 import { createTarget } from "@/lib/repositories/targets";
 
-export function createNewTarget(body: any) {
+export async function createNewTarget(body: any) {
 
-  return createTarget({
+  return await createTarget({
 
     name: body.name,
 
-    platform: body.platform,
+    platform: "General",
 
-    url: body.url ?? "",
+    url: "",
 
-    status: body.status ?? "Recon",
+    status: "Active" as any,
 
-    priority: body.priority ?? "P2",
+    priority: "Medium" as any,
 
-    started_at:
-      body.started_at ??
-      new Date().toISOString(),
+    started_at: new Date().toISOString(),
 
-    last_activity:
-      body.last_activity ??
-      new Date().toISOString(),
+    last_activity: new Date().toISOString(),
 
-    notes: body.notes ?? "",
+    notes: "",
 
-    category: body.category ?? "",
+    category: "",
 
-    scope_url:
-      body.scope_url ??
-      body.url ??
-      "",
+    scope_url: "",
 
-    program_url:
-      body.program_url ??
-      body.url ??
-      "",
+    program_url: "",
 
-    created_by:
-      body.created_by ??
-      "Parth",
+    created_by: "Parth",
 
     archived: 0,
 

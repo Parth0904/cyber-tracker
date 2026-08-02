@@ -3,46 +3,40 @@
 import * as React from "react";
 import { useParams, useRouter } from "next/navigation";
 import { 
-  Play, Plus, FileText, StickyNote, Shield, ExternalLink, Clock, 
-  Terminal, History, BarChart3, Layers, AlertCircle, DollarSign, ArrowLeft 
+  Play, Plus, Clock, Terminal, History, Archive, Trash2, Edit2, AlertCircle, CheckCircle2, X
 } from "lucide-react";
 import { Panel } from "@/components/ui/Panel";
 import { Button } from "@/components/ui/Button";
 import { Badge } from "@/components/ui/Badge";
 import { EmptyState } from "@/components/ui/EmptyState";
-import { Progress } from "@/components/ui/Progress";
 import { Modal } from "@/components/ui/Modal";
-import TargetForm from "@/components/targets/form/TargetForm";
+import { Input } from "@/components/ui/Input";
 
-// --- STRICT WORKSPACE COMPONENT TYPES ---
-type ScopeItem = { type: string; pattern: string; status: string };
-type SessionItem = { id: string; type: string; description: string; start: string; end: string; duration: string; status: string };
-type FindingItem = { id: string; severity: string; status: string; title: string; reward?: string; date: string; url?: string };
-type ReportItem = { id: string; date: string; status: string; reward?: string; resolution: string; url?: string };
-type TimelineItem = { id: string; action: string; timestamp: string };
+type SessionItem = {
+  id: string;
+  type: string;
+  started_at: string;
+  ended_at: string | null;
+  duration: number;
+};
 
 type TargetDetailData = {
-  id: string;
-  name: string;
-  platform: string;
-  status: string;
-  priority: string;
-  url: string;
-  hoursInvested: number;
-  sessionStatus: string;
-  scope: ScopeItem[];
+  target: {
+    id: number;
+    name: string;
+    archived?: number;
+  };
+  statistics: {
+    totalSessions: number;
+    totalHours: number;
+    totalHuntingHours: number;
+    totalFindings: number;
+    totalReports: number;
+    totalValidReports: number;
+    totalReward: number;
+  };
   sessions: SessionItem[];
-  findings: FindingItem[];
-  reports: ReportItem[];
-  timeline: TimelineItem[];
-  notes: string;
-  archived?: number;
-  started_at?: string;
-  last_activity?: string;
-  category?: string;
-  scope_url?: string;
-  program_url?: string;
-  created_by?: string;
+  findings: any[];
 };
 
 export default function TargetDetailsWorkspace() {
@@ -50,11 +44,45 @@ export default function TargetDetailsWorkspace() {
   const router = useRouter();
   const targetId = params?.id as string;
 
-  // State Management - Initialized clean with zero temporary placeholders
   const [data, setData] = React.useState<TargetDetailData | null>(null);
-  const [activeTab, setActiveTab] = React.useState("overview");
   const [loading, setLoading] = React.useState(true);
-  const [isEditModalOpen, setIsEditModalOpen] = React.useState(false);
+  
+  // Renaming Modal State
+  const [isRenameModalOpen, setIsRenameModalOpen] = React.useState(false);
+  const [renameValue, setRenameValue] = React.useState("");
+
+  // Target Deletion Modal State
+  const [isDeleteModalOpen, setIsDeleteModalOpen] = React.useState(false);
+  const [deleteLoading, setDeleteLoading] = React.useState(false);
+
+  // Completed Session Editing Modal State
+  const [isEditSessionModalOpen, setIsEditSessionModalOpen] = React.useState(false);
+  const [editingSession, setEditingSession] = React.useState<SessionItem | null>(null);
+  const [editSessionStart, setEditSessionStart] = React.useState("");
+  const [editSessionEnd, setEditSessionEnd] = React.useState("");
+  const [editSessionLoading, setEditSessionLoading] = React.useState(false);
+
+  // Active Session telemetry
+  const [activeSession, setActiveSession] = React.useState<any>(null);
+  const [elapsed, setElapsed] = React.useState("00:00:00");
+  const [isStartingSession, setIsStartingSession] = React.useState(false);
+
+  // Quick Finding logs tracking state for undo operation
+  const [addedFindingIds, setAddedFindingIds] = React.useState<string[]>([]);
+  const [isLoggingFinding, setIsLoggingFinding] = React.useState(false);
+
+  // Helpers for datetime-local string mapping
+  const toDatetimeLocal = (isoString: string | null) => {
+    if (!isoString) return "";
+    const date = new Date(isoString);
+    const tzOffset = date.getTimezoneOffset() * 60000;
+    return new Date(date.getTime() - tzOffset).toISOString().slice(0, 16);
+  };
+
+  const toISOString = (localString: string) => {
+    if (!localString) return "";
+    return new Date(localString).toISOString();
+  };
 
   const fetchWorkspaceData = async () => {
     try {
@@ -62,6 +90,7 @@ export default function TargetDetailsWorkspace() {
       if (res.ok) {
         const json = await res.json();
         setData(json);
+        setRenameValue(json.target?.name || "");
       }
     } catch (err) {
       console.error("Workspace synchronization vector failure:", err);
@@ -70,24 +99,143 @@ export default function TargetDetailsWorkspace() {
     }
   };
 
+  const checkActiveSession = async () => {
+    try {
+      const res = await fetch("/api/sessions");
+      if (res.ok) {
+        const json = await res.json();
+        // Check if there is an active session for THIS target
+        if (json?.active && String(json.active.targetId) === targetId) {
+          setActiveSession(json.active);
+        } else {
+          setActiveSession(null);
+        }
+      }
+    } catch (err) {
+      console.error("Failed checking active sessions status:", err);
+    }
+  };
+
   React.useEffect(() => {
     if (!targetId) return;
     fetchWorkspaceData();
+    checkActiveSession();
+
+    const interval = setInterval(() => {
+      checkActiveSession();
+    }, 5000);
+    return () => clearInterval(interval);
   }, [targetId]);
 
-  const handleUpdateTarget = async (formData: any) => {
+  // Live Timer Effect
+  React.useEffect(() => {
+    if (!activeSession) return;
+
+    const start = new Date(activeSession.startedAt).getTime();
+    const timer = setInterval(() => {
+      const diff = Date.now() - start;
+      const hrs = Math.floor(diff / 3600000).toString().padStart(2, "0");
+      const mins = Math.floor((diff % 3600000) / 60000).toString().padStart(2, "0");
+      const secs = Math.floor((diff % 60000) / 1000).toString().padStart(2, "0");
+      setElapsed(`${hrs}:${mins}:${secs}`);
+    }, 1000);
+
+    return () => clearInterval(timer);
+  }, [activeSession]);
+
+  const handleStartSession = async () => {
+    setIsStartingSession(true);
+    try {
+      const res = await fetch(`/api/targets/${targetId}/session`, {
+        method: "POST",
+        headers: { "Content-Type": "application/json" },
+        body: JSON.stringify({ type: "Hunting", description: "" })
+      });
+      if (res.ok) {
+        await checkActiveSession();
+        await fetchWorkspaceData();
+      }
+    } catch (err) {
+      console.error("Failed to start hunting session:", err);
+    } finally {
+      setIsStartingSession(false);
+    }
+  };
+
+  const handleEndSession = async (sessionId: number) => {
+    try {
+      const res = await fetch(`/api/sessions/${sessionId}/terminate`, {
+        method: "PATCH",
+        headers: { "Content-Type": "application/json" }
+      });
+      if (res.ok) {
+        setActiveSession(null);
+        await fetchWorkspaceData();
+        window.dispatchEvent(new Event("refresh-consistency-theme"));
+      }
+    } catch (err) {
+      console.error("Failed to end session:", err);
+    }
+  };
+
+  const handleAddQuickFinding = async (status: "Submitted" | "Valid") => {
+    setIsLoggingFinding(true);
+    try {
+      const res = await fetch("/api/findings", {
+        method: "POST",
+        headers: { "Content-Type": "application/json" },
+        body: JSON.stringify({
+          target_id: Number(targetId),
+          title: status === "Valid" ? "Valid Report (Quick Logged)" : "Submitted Report (Quick Logged)",
+          status: status
+        })
+      });
+      if (res.ok) {
+        const json = await res.json();
+        if (json.id) {
+          setAddedFindingIds(prev => [...prev, json.id]);
+        }
+        await fetchWorkspaceData();
+      }
+    } catch (err) {
+      console.error("Failed to add quick finding:", err);
+    } finally {
+      setIsLoggingFinding(false);
+    }
+  };
+
+  const handleUndoQuickFinding = async () => {
+    if (addedFindingIds.length === 0) return;
+    const lastId = addedFindingIds[addedFindingIds.length - 1];
+    try {
+      const res = await fetch(`/api/findings/${lastId}`, {
+        method: "DELETE"
+      });
+      if (res.ok) {
+        setAddedFindingIds(prev => prev.slice(0, -1));
+        await fetchWorkspaceData();
+      }
+    } catch (err) {
+      console.error("Failed to undo finding:", err);
+    }
+  };
+
+  const handleRenameTarget = async (e: React.FormEvent) => {
+    e.preventDefault();
+    if (!renameValue.trim()) return;
+
     try {
       const res = await fetch(`/api/targets/${targetId}`, {
         method: "PATCH",
         headers: { "Content-Type": "application/json" },
-        body: JSON.stringify(formData)
+        body: JSON.stringify({ name: renameValue })
       });
       if (res.ok) {
+        setIsRenameModalOpen(false);
         await fetchWorkspaceData();
-        setIsEditModalOpen(false);
       }
     } catch (err) {
-      console.error("Failed to update target details:", err);
+      console.error("Failed to rename target:", err);
     }
   };
 
@@ -121,43 +269,63 @@ export default function TargetDetailsWorkspace() {
     }
   };
 
-  const handleDelete = async () => {
-    if (!confirm("Are you sure you want to delete this target workspace?")) return;
+  const handleDeleteSubmit = async () => {
+    setDeleteLoading(true);
     try {
       const res = await fetch(`/api/targets/${targetId}`, {
         method: "DELETE"
       });
       if (res.ok) {
+        setIsDeleteModalOpen(false);
         router.push("/targets");
       }
     } catch (err) {
       console.error("Failed to delete target:", err);
+    } finally {
+      setDeleteLoading(false);
     }
   };
 
-  const handleSaveNotes = async () => {
-    if (!data) return;
+  const handleOpenEditSession = (session: SessionItem) => {
+    setEditingSession(session);
+    setEditSessionStart(toDatetimeLocal(session.started_at));
+    setEditSessionEnd(toDatetimeLocal(session.ended_at));
+    setIsEditSessionModalOpen(true);
+  };
+
+  const handleSaveSessionEdit = async (e: React.FormEvent) => {
+    e.preventDefault();
+    if (!editingSession) return;
+    setEditSessionLoading(true);
+
     try {
-      const res = await fetch(`/api/targets/${targetId}`, {
+      const res = await fetch(`/api/sessions/${editingSession.id}`, {
         method: "PATCH",
         headers: { "Content-Type": "application/json" },
         body: JSON.stringify({
-          ...data,
-          notes: data.notes
+          startedAt: toISOString(editSessionStart),
+          endedAt: toISOString(editSessionEnd)
         })
       });
       if (res.ok) {
-        alert("Buffer notebook synced successfully.");
+        setIsEditSessionModalOpen(false);
+        await fetchWorkspaceData();
       }
     } catch (err) {
-      console.error("Failed to sync buffer notebook:", err);
+      console.error("Failed to edit session hours:", err);
+    } finally {
+      setEditSessionLoading(false);
     }
+  };
+
+  const isHuntingSession = (type: string) => {
+    return ["hunting", "recon", "testing", "reporting"].includes(type.toLowerCase());
   };
 
   if (loading) {
     return (
       <div className="flex items-center justify-center min-h-[400px] font-mono text-xs text-zinc-500 uppercase tracking-widest animate-pulse">
-        // INDEXING_ACTIVE_WORKSPACE_ENVIRONMENT...
+        // RETRIEVING_TARGET_OPERATIONAL_MATRIX...
       </div>
     );
   }
@@ -171,280 +339,273 @@ export default function TargetDetailsWorkspace() {
         />
         <div className="mt-4 flex justify-center">
           <Button variant="secondary" onClick={() => router.push("/targets")} className="gap-2">
-            <ArrowLeft size={14} /> Back to Mission Control
+            Back to Mission Control
           </Button>
         </div>
       </div>
     );
   }
 
-  const workspaceTabs = [
-    { id: "overview", label: "Overview & Scope", icon: <Terminal size={13} /> },
-    { id: "sessions", label: "Toggl Sessions", icon: <Layers size={13} /> },
-    { id: "findings", label: "Issues (Findings)", icon: <AlertCircle size={13} /> },
-    { id: "reports", label: "Submissions (Reports)", icon: <FileText size={13} /> },
-    { id: "notes", label: "Hunting Notes", icon: <StickyNote size={13} /> },
-    { id: "timeline", label: "Continuous Timeline", icon: <History size={13} /> }
-  ];
+  const isArchived = data.target.archived === 1;
+
+  // Filter session history logs to ONLY display Hunting sessions (excluding Learning)
+  const huntingSessions = (data.sessions || []).filter((s) => isHuntingSession(s.type));
 
   return (
-    <div className="max-w-7xl mx-auto px-4 py-6 space-y-6 text-zinc-200">
+    <div className="max-w-4xl mx-auto px-4 py-8 space-y-8 text-zinc-200">
       
       {/* 1. TOP HERO REGISTRY BLOCK */}
-      <div className="border border-border-subtle bg-card rounded-lg p-5 space-y-4">
+      <div className="border border-border-subtle bg-card rounded-xl p-6 space-y-6">
         <div className="flex flex-col md:flex-row md:items-center justify-between gap-4">
           <div className="space-y-1">
             <div className="flex items-center gap-2 flex-wrap">
-              <span className="text-zinc-500 font-mono text-xs uppercase">{data.platform}</span>
+              <span className="text-zinc-500 font-mono text-xs uppercase">Target Registry</span>
               <span className="text-zinc-600 font-mono text-xs">//</span>
-              <h1 className="text-md font-bold text-white tracking-tight">{data.name}</h1>
-              <Badge variant={data.priority === "P1" ? "danger" : "warning"}>{data.priority}</Badge>
-              <Badge variant="cyan">{data.status}</Badge>
+              <h1 className="text-lg font-bold text-white tracking-tight font-mono uppercase">{data.target.name}</h1>
+              {isArchived && <Badge variant="neutral">Vaulted</Badge>}
             </div>
-            <a href={data.url} target="_blank" rel="noreferrer" className="inline-flex items-center gap-1.5 text-[11px] font-mono text-accent-cyan hover:underline">
-              {data.url} <ExternalLink size={11} />
-            </a>
+            <p className="text-[11px] text-zinc-500 font-mono mt-0.5">Time accumulator and permanent container.</p>
           </div>
 
-          {/* QUICK TERMINAL ACTIONS HUB */}
-          <div className="flex flex-wrap items-center gap-2">
-            <Button variant="primary" className="h-8 text-[11px] gap-1.5 bg-success-emerald text-black border-success-emerald hover:opacity-90">
-              <Play size={12} fill="currentColor" /> Start Session
+          {/* ACTION BUTTONS */}
+          <div className="flex flex-wrap items-center gap-2 font-mono text-[10px]">
+            <Button variant="secondary" className="h-8 text-[11px] gap-1 px-3" onClick={() => setIsRenameModalOpen(true)}>
+              <Edit2 size={12} /> Rename
             </Button>
-            <Button variant="secondary" className="h-8 text-[11px] gap-1.5">
-              <Plus size={12} /> Log Finding
-            </Button>
-            <Button variant="secondary" className="h-8 text-[11px] gap-1.5">
-              <FileText size={12} /> Report
-            </Button>
-            <Button variant="secondary" className="h-8 text-[11px] gap-1.5" onClick={() => setIsEditModalOpen(true)}>
-              Edit Target
-            </Button>
-            {data.status === "Archived" || data.archived === 1 ? (
-              <Button variant="secondary" className="h-8 text-[11px] gap-1.5" onClick={handleRestore}>
-                Restore Target
+            {isArchived ? (
+              <Button variant="secondary" className="h-8 text-[11px] gap-1 px-3 text-success-emerald border-success-emerald/20 bg-success-emerald/5 hover:bg-success-emerald/10" onClick={handleRestore}>
+                Restore
               </Button>
             ) : (
-              <Button variant="secondary" className="h-8 text-[11px] gap-1.5 text-warning-amber" onClick={handleArchive}>
-                Archive Target
+              <Button variant="secondary" className="h-8 text-[11px] gap-1 px-3 text-warning-amber border-warning-amber/25 hover:bg-warning-amber/5" onClick={handleArchive}>
+                Archive
               </Button>
             )}
-            <Button variant="secondary" className="h-8 text-[11px] gap-1.5 text-danger-rose border-danger-rose/25" onClick={handleDelete}>
-              Delete Target
+            <Button variant="secondary" className="h-8 text-[11px] gap-1 px-3 text-danger-rose border-danger-rose/25 hover:bg-danger-rose/5" onClick={() => setIsDeleteModalOpen(true)}>
+              <Trash2 size={12} /> Delete
             </Button>
           </div>
         </div>
-      </div>
 
-      {/* 2. THE QUAD-OVERVIEW CARDS */}
-      <div className="grid grid-cols-2 lg:grid-cols-4 gap-4 font-mono">
-        <div className="border border-border-subtle bg-black rounded-lg p-3.5">
-          <span className="block text-[9px] text-zinc-500 uppercase font-medium">Total Invested Time</span>
-          <span className="block text-lg font-bold text-white mt-1">{data.hoursInvested?.toFixed(1) || "0.0"}h</span>
-          <span className="block text-[9px] text-success-emerald mt-0.5">▲ Operational velocity active</span>
-        </div>
-        <div className="border border-border-subtle bg-black rounded-lg p-3.5">
-          <span className="block text-[9px] text-zinc-500 uppercase font-medium">Recon & Test Sessions</span>
-          <span className="block text-lg font-bold text-white mt-1">{(data.sessions || []).length} Logs</span>
-          <span className="block text-[9px] text-zinc-400 mt-0.5">Stable continuous audit track</span>
-        </div>
-        <div className="border border-border-subtle bg-black rounded-lg p-3.5">
-          <span className="block text-[9px] text-zinc-500 uppercase font-medium">Identified Vulnerabilities</span>
-          <span className="block text-lg font-bold text-success-emerald mt-1">{(data.findings || []).length} Bugs</span>
-          <span className="block text-[9px] text-accent-cyan mt-0.5">Triaged threat mapping</span>
-        </div>
-        <div className="border border-border-subtle bg-black rounded-lg p-3.5">
-          <span className="block text-[9px] text-zinc-500 uppercase font-medium">Submitted Platform Reports</span>
-          <span className="block text-lg font-bold text-warning-amber mt-1">{(data.reports || []).length} Forms</span>
-          <span className="block text-[9px] text-zinc-500 mt-0.5">Resolution rate tracking clean</span>
-        </div>
-      </div>
-
-      {/* 3. TABBED WORKSPACE FRAMEWORK ROW */}
-      <div className="flex bg-zinc-950 px-2 border border-border-subtle rounded-t-lg overflow-x-auto scrollbar-none gap-1 pt-1 bg-black">
-        {workspaceTabs.map(tab => (
-          <button
-            key={tab.id}
-            onClick={() => setActiveTab(tab.id)}
-            className={`flex items-center gap-1.5 py-2 px-3.5 text-xs font-medium transition-all rounded-t-md border-t border-x relative -mb-[1px] whitespace-nowrap
-              ${activeTab === tab.id 
-                ? "bg-card border-border-subtle text-white font-semibold" 
-                : "bg-transparent border-transparent text-zinc-500 hover:text-zinc-300"
-              }`}
-          >
-            {tab.icon}
-            <span>{tab.label}</span>
-          </button>
-        ))}
-      </div>
-
-      {/* 4. DYNAMIC VIEWPORTS TERMINAL CONTAINER */}
-      <div className="border-x border-b border-border-subtle bg-card rounded-b-lg p-5 min-h-[300px]">
-        
-        {/* TAB viewport: SCOPE MAP OVERVIEW */}
-        {activeTab === "overview" && (
-          <div className="space-y-4 animate-in fade-in duration-100">
-            <h3 className="text-xs font-mono font-bold uppercase text-zinc-400 tracking-wider flex items-center gap-2">// DIRECT_ATTACK_SURFACE_SCOPE</h3>
-            {(data.scope || []).length === 0 ? (
-              <EmptyState title="No Scopes Cataloged" description="This workspace does not contain registered network bounds or active binary assets targets." />
-            ) : (
-              <div className="border border-border-subtle rounded-md overflow-hidden bg-black">
-                <table className="w-full text-left text-xs font-mono">
-                  <thead className="bg-zinc-950 border-b border-border-subtle text-zinc-500 text-[10px]">
-                    <tr>
-                      <th className="p-3">Asset Target Type</th>
-                      <th className="p-3">Scope Rule Rule / Endpoint Track</th>
-                      <th className="p-3 text-right">Coverage Status</th>
-                    </tr>
-                  </thead>
-                  <tbody className="divide-y divide-border-subtle/40 text-zinc-300">
-                    {data.scope.map((s, idx) => (
-                      <tr key={idx} className="hover:bg-zinc-900/30">
-                        <td className="p-3 text-zinc-500">{s.type}</td>
-                        <td className="p-3 text-white font-semibold">{s.pattern}</td>
-                        <td className="p-3 text-right"><Badge variant="cyan">{s.status}</Badge></td>
-                      </tr>
-                    ))}
-                  </tbody>
-                </table>
+        {/* ACTIVE RUNNING TIMER PANEL */}
+        {activeSession ? (
+          <div className="bg-zinc-950/80 border border-accent-cyan/30 p-4 rounded-lg flex items-center justify-between font-mono text-xs text-zinc-300">
+            <div className="space-y-1">
+              <span className="text-[9px] text-accent-cyan block uppercase tracking-wider animate-pulse">// ACTIVE TIME ACCUMULATOR</span>
+              <span className="text-white font-bold">TYPE: {activeSession.type.toUpperCase()}</span>
+            </div>
+            <div className="flex items-center gap-4">
+              <div className="text-right">
+                <span className="text-[9px] text-zinc-500 block uppercase">ELAPSED</span>
+                <span className="text-md font-bold text-white tracking-widest">{elapsed}</span>
               </div>
-            )}
-          </div>
-        )}
-
-        {/* TAB viewport: TOGGL HUNTING SESSIONS LOGS */}
-        {activeTab === "sessions" && (
-          <div className="space-y-3 animate-in fade-in duration-100">
-            {(data.sessions || []).length === 0 ? (
-              <EmptyState title="No Tracking Sessions Found" description="Launch your first live testing session to audit real-time tracking durations." />
-            ) : (
-              data.sessions.map(s => (
-                <div key={s.id} className="border border-border-subtle bg-black p-4 rounded-md flex flex-col sm:flex-row justify-between sm:items-center gap-3 font-mono text-xs">
-                  <div className="space-y-1">
-                    <div className="flex items-center gap-2">
-                      <Badge variant="neutral">{s.type.toUpperCase()}</Badge>
-                      <span className="text-zinc-500 text-[11px]">{s.start} - {s.end}</span>
-                    </div>
-                    <p className="font-sans text-zinc-300 leading-relaxed text-xs">{s.description}</p>
-                  </div>
-                  <div className="flex items-center gap-3 self-end sm:self-auto shrink-0">
-                    <span className="font-bold text-white text-sm">{s.duration}</span>
-                    <Button variant="secondary" className="h-6 text-[10px] px-2">Resume</Button>
-                  </div>
-                </div>
-              ))
-            )}
-          </div>
-        )}
-
-        {/* TAB viewport: GITHUB ISSUES FINDINGS RUNWAY */}
-        {activeTab === "findings" && (
-          <div className="space-y-3 animate-in fade-in duration-100">
-            {(data.findings || []).length === 0 ? (
-              <EmptyState title="No Bugs Logged" description="No unhandled operational flaws have been index tracked against this targets network frame yet." />
-            ) : (
-              data.findings.map(f => (
-                <div key={f.id} className="border border-border-subtle bg-black p-4 rounded-md flex justify-between items-start gap-3 transition-colors hover:border-zinc-700">
-                  <div className="space-y-1">
-                    <div className="flex items-center gap-2 flex-wrap">
-                      <Badge variant={f.severity === "Critical" || f.severity === "High" ? "danger" : "warning"}>{f.severity}</Badge>
-                      <span className="text-[10px] font-mono text-zinc-500">{f.date}</span>
-                    </div>
-                    <h4 className="text-xs font-semibold text-white pt-1">{f.title}</h4>
-                    <div className="text-[10px] font-mono text-zinc-500">STATE STATUS // <span className="text-accent-cyan">{f.status}</span></div>
-                  </div>
-                  {f.reward && <span className="text-xs font-mono font-bold text-success-emerald bg-success-emerald/10 border border-success-emerald/20 px-2 py-0.5 rounded shrink-0">{f.reward}</span>}
-                </div>
-              ))
-            )}
-          </div>
-        )}
-
-        {/* TAB viewport: DOCUMENTATION SUBMITTED REPORTS */}
-        {activeTab === "reports" && (
-          <div className="space-y-3 animate-in fade-in duration-100">
-            {(data.reports || []).length === 0 ? (
-              <EmptyState title="No Disclosures Discovered" description="Disclose vulnerabilities to the tracking endpoint to initialize your submission stream history logs." />
-            ) : (
-              data.reports.map(r => (
-                <div key={r.id} className="border border-border-subtle bg-black p-4 rounded-md font-mono text-xs space-y-2">
-                  <div className="flex items-center justify-between border-b border-border-subtle/40 pb-2">
-                    <span className="text-zinc-400">SUBMISSION: {r.id.toUpperCase()}</span>
-                    <span className="text-[10px] text-zinc-600">{r.date}</span>
-                  </div>
-                  <div className="grid grid-cols-2 sm:grid-cols-3 gap-3 pt-1 text-[11px]">
-                    <div><span className="text-zinc-600 block text-[9px] uppercase">Resolution</span><span className="text-zinc-200">{r.resolution}</span></div>
-                    <div><span className="text-zinc-600 block text-[9px] uppercase">Payout</span><span className="text-success-emerald font-bold">{r.reward || "$0.00"}</span></div>
-                    <div><span className="text-zinc-600 block text-[9px] uppercase">State tracking</span><span className="text-warning-amber">{r.status}</span></div>
-                  </div>
-                </div>
-              ))
-            )}
-          </div>
-        )}
-
-        {/* TAB viewport: INTEGRATED HUNTING NOTES MARKDOWN CANVAS */}
-        {activeTab === "notes" && (
-          <div className="space-y-4 animate-in fade-in duration-100">
-            <div className="flex items-center justify-between border-b border-border-subtle pb-2">
-              <h3 className="text-xs font-mono font-bold text-zinc-400 uppercase tracking-wider">// LOCAL_WORKSPACE_NOTEBOOK</h3>
-              <Button variant="secondary" className="h-6 text-[10px] px-2" onClick={handleSaveNotes}>Save Buffer</Button>
+              <Button 
+                variant="primary" 
+                onClick={() => handleEndSession(activeSession.id)}
+                className="h-8 text-[9px] bg-danger-rose text-white border-danger-rose hover:opacity-90 font-bold uppercase tracking-wider"
+              >
+                End Session
+              </Button>
             </div>
-            <textarea
-              className="w-full h-48 bg-black border border-border-subtle rounded-md p-3 text-xs font-mono text-zinc-300 focus:outline-none focus:border-accent-cyan resize-y leading-relaxed"
-              placeholder="Inject tactical note segments, endpoints payloads vectors, tracking targets configurations..."
-              value={data.notes || ""}
-              onChange={(e) => setData(data ? { ...data, notes: e.target.value } : null)}
-            />
           </div>
-        )}
+        ) : (
+          !isArchived && (
+            <div className="flex flex-wrap gap-3 justify-start font-mono items-center">
+              <Button 
+                variant="primary" 
+                className="h-9 px-4 text-xs font-bold bg-accent-cyan text-black border-accent-cyan hover:opacity-90 flex items-center gap-1.5 uppercase tracking-wider"
+                onClick={handleStartSession}
+                disabled={isStartingSession}
+              >
+                <Play size={11} fill="currentColor" /> Start Hunting Session
+              </Button>
 
-        {/* TAB viewport: REVERSE-CHRONOLOGICAL OPERATIONAL AUDIT TIMELINE */}
-        {activeTab === "timeline" && (
-          <div className="space-y-4 relative before:absolute before:left-2 before:top-2 before:bottom-2 before:w-[1px] before:bg-border-subtle animate-in fade-in duration-100 pl-6">
-            {(data.timeline || []).length === 0 ? (
-              <div className="text-center font-mono text-[10px] text-zinc-600 py-6 -ml-6">// RETRIEVAL_TIMELINE_EMPTY</div>
-            ) : (
-              data.timeline.map(t => (
-                <div key={t.id} className="relative group">
-                  <div className="absolute -left-6.5 top-1.5 h-2 w-2 rounded-full bg-zinc-800 border border-zinc-600 group-hover:bg-accent-cyan transition-colors" />
-                  <div className="flex items-center justify-between gap-4 text-xs font-mono bg-black p-3 rounded border border-border-subtle/50">
-                    <span className="text-zinc-300">{t.action}</span>
-                    <span className="text-[10px] text-zinc-600 shrink-0">{t.timestamp}</span>
-                  </div>
-                </div>
-              ))
-            )}
-          </div>
-        )}
+              <div className="h-6 w-px bg-zinc-800 mx-1 hidden sm:block" />
 
+              <Button 
+                variant="secondary" 
+                className="h-9 px-3 text-xs font-bold text-warning-amber border-warning-amber/30 hover:bg-warning-amber/10 flex items-center gap-1.5 uppercase tracking-wider bg-black"
+                onClick={() => handleAddQuickFinding("Submitted")}
+                disabled={isLoggingFinding}
+              >
+                + Log Submitted
+              </Button>
+
+              <Button 
+                variant="secondary" 
+                className="h-9 px-3 text-xs font-bold text-success-emerald border-success-emerald/30 hover:bg-success-emerald/10 flex items-center gap-1.5 uppercase tracking-wider bg-black"
+                onClick={() => handleAddQuickFinding("Valid")}
+                disabled={isLoggingFinding}
+              >
+                + Log Valid
+              </Button>
+
+              {addedFindingIds.length > 0 && (
+                <button
+                  type="button"
+                  onClick={handleUndoQuickFinding}
+                  className="text-zinc-500 hover:text-white transition-colors text-[10px] uppercase underline ml-1 cursor-pointer font-bold"
+                >
+                  Undo last ({addedFindingIds.length})
+                </button>
+              )}
+            </div>
+          )
+        )}
       </div>
 
-      {isEditModalOpen && (
-        <Modal 
-          isOpen={isEditModalOpen} 
-          onClose={() => setIsEditModalOpen(false)} 
-          title="Configure Target Workspace Parameters"
-        >
-          <TargetForm 
-            initialData={{
-              name: data.name,
-              platform: data.platform,
-              url: data.url || "",
-              status: data.status as any,
-              priority: data.priority as any,
-              started_at: data.started_at || new Date().toISOString(),
-              last_activity: data.last_activity || new Date().toISOString(),
-              notes: data.notes || "",
-              category: data.category || "",
-              scope_url: data.scope_url || "",
-              program_url: data.program_url || "",
-              created_by: data.created_by || "",
-              archived: data.archived || 0,
-            }} 
-            onSubmit={handleUpdateTarget} 
-            submitLabel="Sync Configurations"
+      {/* 2. THE QUAD-OVERVIEW METRICS CARDS */}
+      <div className="grid grid-cols-1 sm:grid-cols-3 gap-4 font-mono">
+        <div className="border border-border-subtle bg-black rounded-lg p-4">
+          <span className="block text-[9px] text-zinc-500 uppercase font-medium">Hunting Time</span>
+          <span className="block text-xl font-bold text-white mt-1">{data.statistics.totalHuntingHours?.toFixed(1) || "0.0"}h</span>
+        </div>
+        <div className="border border-border-subtle bg-black rounded-lg p-4">
+          <span className="block text-[9px] text-zinc-500 uppercase font-medium">Reports Submitted</span>
+          <span className="block text-xl font-bold text-warning-amber mt-1">{data.statistics.totalReports ?? 0}</span>
+        </div>
+        <div className="border border-border-subtle bg-black rounded-lg p-4">
+          <span className="block text-[9px] text-zinc-500 uppercase font-medium">Valid Reports</span>
+          <span className="block text-xl font-bold text-success-emerald mt-1">{data.statistics.totalValidReports ?? 0}</span>
+        </div>
+      </div>
+
+      {/* 3. SESSION HISTORY TIMELINE */}
+      <div className="space-y-4">
+        <h2 className="text-xs font-mono font-bold tracking-wider uppercase text-zinc-500 flex items-center gap-2 border-b border-border-subtle pb-2">
+          <History className="w-3.5 h-3.5" /> Work Investment Timeline ({huntingSessions.length} Logs)
+        </h2>
+
+        {huntingSessions.length === 0 ? (
+          <EmptyState 
+            title="Timeline Empty" 
+            description="No hunting sessions have been registered in this target container yet. Start your first session above to accumulate metrics."
           />
+        ) : (
+          <div className="space-y-3">
+            {huntingSessions.map((session) => (
+              <div key={session.id} className="border border-border-subtle bg-zinc-950 p-4 rounded-lg flex items-center justify-between gap-4 font-mono text-xs">
+                <div className="space-y-1.5">
+                  <div className="flex items-center gap-2 flex-wrap">
+                    <Badge variant="cyan">
+                      {session.type.toUpperCase()}
+                    </Badge>
+                    <span className="text-[10px] text-zinc-500">
+                      {new Date(session.started_at).toLocaleString([], { dateStyle: "short", timeStyle: "short" })} 
+                      {session.ended_at ? ` - ${new Date(session.ended_at).toLocaleString([], { timeStyle: "short" })}` : " (Active)"}
+                    </span>
+                  </div>
+                </div>
+                
+                <div className="flex items-center gap-4 shrink-0">
+                  <span className="text-xs font-bold text-white text-right">
+                    {session.ended_at ? `${(session.duration / 60).toFixed(1)}h` : "Running"}
+                  </span>
+                  {session.ended_at && (
+                    <button
+                      onClick={() => handleOpenEditSession(session)}
+                      className="p-1 border border-border-subtle text-zinc-500 hover:text-accent-cyan hover:border-accent-cyan/30 bg-zinc-900 rounded-md transition-colors"
+                      title="Edit Session Times"
+                    >
+                      <Clock className="w-3.5 h-3.5" />
+                    </button>
+                  )}
+                </div>
+              </div>
+            ))}
+          </div>
+        )}
+      </div>
+
+      {/* RENAME TARGET MODAL */}
+      {isRenameModalOpen && (
+        <Modal isOpen={isRenameModalOpen} onClose={() => setIsRenameModalOpen(false)} title="Rename Target Container">
+          <form onSubmit={handleRenameTarget} className="space-y-4 font-mono text-xs">
+            <div className="space-y-1.5">
+              <label className="block text-[10px] text-zinc-500 uppercase">Target Name</label>
+              <Input
+                placeholder="Target Name"
+                value={renameValue}
+                onChange={(e) => setRenameValue(e.target.value)}
+                required
+              />
+            </div>
+            <div className="flex justify-end gap-2 pt-2">
+              <Button type="button" variant="secondary" onClick={() => setIsRenameModalOpen(false)}>
+                Cancel
+              </Button>
+              <Button type="submit" variant="primary" className="bg-accent-cyan text-black border-accent-cyan hover:opacity-90">
+                Rename Target
+              </Button>
+            </div>
+          </form>
+        </Modal>
+      )}
+
+      {/* DELETE CONFIRMATION MODAL */}
+      {isDeleteModalOpen && (
+        <Modal isOpen={isDeleteModalOpen} onClose={() => setIsDeleteModalOpen(false)} title="Delete Target Container">
+          <div className="space-y-4 font-mono text-xs text-zinc-300">
+            <div className="flex items-start gap-2.5 bg-danger-rose/10 border border-danger-rose/25 p-3 rounded text-[11px] leading-relaxed text-danger-rose">
+              <AlertCircle size={16} className="shrink-0 mt-0.5" />
+              <div>
+                Are you sure you want to delete the target container <strong className="text-white uppercase">{data.target.name}</strong>? 
+                This will permanently delete all of its logged history, sessions, findings, and statistics. This action is irreversible.
+              </div>
+            </div>
+            <div className="flex justify-end gap-2 pt-2">
+              <Button type="button" variant="secondary" onClick={() => setIsDeleteModalOpen(false)}>
+                Cancel
+              </Button>
+              <Button 
+                type="button" 
+                variant="primary" 
+                isLoading={deleteLoading} 
+                onClick={handleDeleteSubmit}
+                className="bg-danger-rose text-white border-danger-rose hover:opacity-90 font-bold"
+              >
+                Confirm Delete
+              </Button>
+            </div>
+          </div>
+        </Modal>
+      )}
+
+      {/* EDIT COMPLETED SESSION MODAL */}
+      {isEditSessionModalOpen && editingSession && (
+        <Modal isOpen={isEditSessionModalOpen} onClose={() => setIsEditSessionModalOpen(false)} title="Edit Completed Session Logs">
+          <form onSubmit={handleSaveSessionEdit} className="space-y-4 font-mono text-xs">
+            <div className="space-y-1.5">
+              <label className="block text-[10px] text-zinc-500 uppercase">Session Start Time</label>
+              <input
+                type="datetime-local"
+                value={editSessionStart}
+                onChange={(e) => setEditSessionStart(e.target.value)}
+                className="w-full bg-black border border-border-subtle rounded-md text-xs px-3 py-2 text-zinc-300 focus:outline-none focus:border-accent-cyan font-mono h-9"
+                required
+              />
+            </div>
+            
+            <div className="space-y-1.5">
+              <label className="block text-[10px] text-zinc-500 uppercase">Session End Time</label>
+              <input
+                type="datetime-local"
+                value={editSessionEnd}
+                onChange={(e) => setEditSessionEnd(e.target.value)}
+                className="w-full bg-black border border-border-subtle rounded-md text-xs px-3 py-2 text-zinc-300 focus:outline-none focus:border-accent-cyan font-mono h-9"
+                required
+              />
+            </div>
+
+            <div className="flex justify-end gap-2 pt-2">
+              <Button type="button" variant="secondary" onClick={() => setIsEditSessionModalOpen(false)}>
+                Cancel
+              </Button>
+              <Button type="submit" variant="primary" isLoading={editSessionLoading} className="bg-accent-cyan text-black border-accent-cyan hover:opacity-90">
+                Save Changes
+              </Button>
+            </div>
+          </form>
         </Modal>
       )}
 

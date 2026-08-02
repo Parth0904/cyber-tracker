@@ -1,48 +1,45 @@
 import { DailyEntry } from "@/lib/types";
 
-type DailyForm = {
-  sleep: number;
+export type DailyForm = {
   bedTime: string;
-  reading: boolean;
-  focusFeeling: number;
+  wakeTime: string;
   workout: boolean;
-  steps: number;
+  reading: boolean;
   notes: string;
 };
 
-const focusMap = {
-  1: "Distracted",
-  2: "Focused",
-  3: "Deep",
-  4: "Flow State",
-} as const;
+export function calculateSleepHours(bedTime: string, wakeTime: string): number {
+  if (!bedTime || !wakeTime) return 0;
+
+  const [bedH, bedM] = bedTime.split(":").map(Number);
+  const [wakeH, wakeM] = wakeTime.split(":").map(Number);
+
+  if (isNaN(bedH) || isNaN(bedM) || isNaN(wakeH) || isNaN(wakeM)) return 0;
+
+  const bedMinutes = bedH * 60 + bedM;
+  const wakeMinutes = wakeH * 60 + wakeM;
+
+  let diffMinutes = wakeMinutes - bedMinutes;
+  if (diffMinutes < 0) {
+    diffMinutes += 24 * 60; // crossover midnight
+  }
+
+  return Math.round((diffMinutes / 60) * 10) / 10;
+}
 
 export function mapDailyFormToEntry(
   date: string,
   form: DailyForm
 ): DailyEntry {
-
   return {
-
     date,
-
-    sleep_hours: form.sleep,
-
+    sleep_hours: calculateSleepHours(form.bedTime, form.wakeTime),
     bed_time: form.bedTime,
-
+    wake_time: form.wakeTime,
     reading: form.reading ? 1 : 0,
-
-    focus_feeling:
-      focusMap[
-        form.focusFeeling as keyof typeof focusMap
-      ],
-
+    focus_feeling: "",
     workout: form.workout ? 1 : 0,
-
-    steps: form.steps,
-
+    steps: 0,
     notes: form.notes ?? "",
-
   };
-
 }

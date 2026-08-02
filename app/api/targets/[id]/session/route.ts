@@ -23,7 +23,7 @@ export async function POST(
     description,
   } = await req.json();
 
-  startSession(
+  await startSession(
     Number(id),
     type,
     description

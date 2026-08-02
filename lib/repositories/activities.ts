@@ -1,20 +1,11 @@
-import {
-  many,
-} from "@/lib/database";
+import { many, execute } from "@/lib/database";
+import { ActivityRow } from "@/lib/types";
+import { TimeRange } from "@/lib/types/analytics";
 
-import {
-  ActivityRow,
-} from "@/lib/types";
-
-import {
-  TimeRange,
-} from "@/lib/types/analytics";
-
-export function getTodayActivities(
+export async function getTodayActivities(
   date: string
-): ActivityRow[] {
-
-  return many<ActivityRow>(
+): Promise<ActivityRow[]> {
+  return await many<ActivityRow>(
     `
       SELECT *
       FROM activities
@@ -22,27 +13,23 @@ export function getTodayActivities(
     `,
     date
   );
-
 }
 
-export function getAllActivities(): ActivityRow[] {
-
-  return many<ActivityRow>(
+export async function getAllActivities(): Promise<ActivityRow[]> {
+  return await many<ActivityRow>(
     `
       SELECT *
       FROM activities
       ORDER BY date ASC
     `
   );
-
 }
 
-export function getActivities(
+export async function getActivities(
   range: TimeRange
-): ActivityRow[] {
-
+): Promise<ActivityRow[]> {
   if (range === "all") {
-    return getAllActivities();
+    return await getAllActivities();
   }
 
   const days = {
@@ -51,14 +38,32 @@ export function getActivities(
     year: 365,
   }[range];
 
-  return many<ActivityRow>(
+  // Calculate parameters in JS to ensure cross-database SQL syntax compatibility
+  const thresholdDate = new Date();
+  thresholdDate.setDate(thresholdDate.getDate() - days);
+  const thresholdDateStr = thresholdDate.toISOString().split("T")[0];
+
+  return await many<ActivityRow>(
     `
       SELECT *
       FROM activities
-      WHERE date >= date('now', ?)
+      WHERE date >= ?
       ORDER BY date ASC
     `,
-    `-${days} days`
+    thresholdDateStr
   );
+}
 
+export async function incrementActivity(
+  date: string,
+  type: string
+): Promise<void> {
+  await execute(
+    `
+      INSERT INTO activities (date, type)
+      VALUES (?, ?)
+    `,
+    date,
+    type
+  );
 }

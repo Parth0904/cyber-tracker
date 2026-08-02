@@ -6,6 +6,8 @@ sleep_hours INTEGER,
 
 bed_time TEXT,
 
+wake_time TEXT,
+
 reading INTEGER,
 
 focus_feeling TEXT,

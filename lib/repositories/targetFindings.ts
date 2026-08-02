@@ -21,33 +21,22 @@ export type Severity =
 
 export type TargetFinding = {
   id: number;
-
   target_id: number;
-
   title: string;
-
   type: string;
-
   severity: Severity;
-
   status: FindingStatus;
-
   submitted_at: string;
-
   reward: number;
-
   cve: string;
-
   report_url: string;
-
   notes: string;
 };
 
-export function getFindings(
+export async function getFindings(
   targetId: number
-): TargetFinding[] {
-
-  return many<TargetFinding>(
+): Promise<TargetFinding[]> {
+  return await many<TargetFinding>(
     `
       SELECT *
       FROM target_findings
@@ -56,14 +45,12 @@ export function getFindings(
     `,
     targetId
   );
-
 }
 
-export function getFinding(
+export async function getFinding(
   id: number
-): TargetFinding | undefined {
-
-  return one<TargetFinding>(
+): Promise<TargetFinding | undefined> {
+  return await one<TargetFinding>(
     `
       SELECT *
       FROM target_findings
@@ -71,39 +58,25 @@ export function getFinding(
     `,
     id
   );
-
 }
 
-export function createFinding(
+export async function createFinding(
   finding: Omit<TargetFinding, "id">
 ) {
-
-  return execute(
+  return await execute(
     `
       INSERT INTO target_findings (
-
         target_id,
-
         title,
-
         type,
-
         severity,
-
         status,
-
         submitted_at,
-
         reward,
-
         cve,
-
         report_url,
-
         notes
-
       )
-
       VALUES (?, ?, ?, ?, ?, ?, ?, ?, ?, ?)
     `,
     finding.target_id,
@@ -117,38 +90,25 @@ export function createFinding(
     finding.report_url,
     finding.notes
   );
-
 }
 
-export function updateFinding(
+export async function updateFinding(
   id: number,
   finding: Omit<TargetFinding, "id">
 ) {
-
-  return execute(
+  return await execute(
     `
       UPDATE target_findings
-
       SET
-
         title = ?,
-
         type = ?,
-
         severity = ?,
-
         status = ?,
-
         submitted_at = ?,
-
         reward = ?,
-
         cve = ?,
-
         report_url = ?,
-
         notes = ?
-
       WHERE id = ?
     `,
     finding.title,
@@ -162,14 +122,12 @@ export function updateFinding(
     finding.notes,
     id
   );
-
 }
 
-export function deleteFinding(
+export async function deleteFinding(
   id: number
 ) {
-
-  return execute(
+  return await execute(
     `
       DELETE
       FROM target_findings
@@ -177,17 +135,14 @@ export function deleteFinding(
     `,
     id
   );
-
 }
 
-export function getAllFindings(): TargetFinding[] {
-
-  return many<TargetFinding>(
+export async function getAllFindings(): Promise<TargetFinding[]> {
+  return await many<TargetFinding>(
     `
       SELECT *
       FROM target_findings
       ORDER BY submitted_at DESC
     `
   );
-
 }

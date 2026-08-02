@@ -1,0 +1,767 @@
+import { 
+  startOfISOWeek, 
+  endOfISOWeek, 
+  setISOWeek, 
+  setISOWeekYear,
+  getISOWeek, 
+  getISOWeekYear, 
+  subWeeks, 
+  subDays 
+} from "date-fns";
+import { getAllDailyEntries } from "@/lib/repositories/dailyEntries";
+import { getAllSessions } from "@/lib/repositories/targetSessions";
+import { getAllLearningSessions } from "@/lib/repositories/learning";
+import { getAllFindings } from "@/lib/repositories/targetFindings";
+import { getAllTargets } from "@/lib/repositories/targets";
+import { getCorrelationDiagnostics } from "@/lib/services/correlationEngine";
+import { getWeeklyReview, saveWeeklyReview } from "@/lib/repositories/weeklyReview";
+
+export type ComparisonMetric = {
+  thisWeekValue: number;
+  prevWeekValue: number;
+  prevWeekDiffPercent: number;
+  avg30dValue: number;
+  avg30dDiffPercent: number;
+};
+
+export type TargetRanking = {
+  name: string;
+  hours: number;
+  reportsSubmitted: number;
+  validReports: number;
+  hoursPerValidReport: number | string;
+};
+
+export type TopicRanking = {
+  name: string;
+  hours: number;
+  sessions: number;
+  lastStudied: string;
+};
+
+export type HabitReviewDetail = {
+  readingDays: number;
+  readingDaysDiffPrev: number;
+  readingDaysDiff30d: number;
+  workoutCount: number;
+  workoutCountDiffPrev: number;
+  workoutCountDiff30d: number;
+  avgSleepHours: number;
+  avgSleepHoursDiffPrev: number;
+  avgSleepHoursDiff30d: number;
+  avgBedTime: string;
+  avgWakeTime: string;
+  completionRate: number;
+  consistencyScore: number;
+};
+
+export type WeeklyReviewReport = {
+  year: number;
+  weekNumber: number;
+  startDate: string;
+  endDate: string;
+  
+  // Section 1: Executive Summary
+  executiveSummary: {
+    consistencyState: "green" | "amber" | "red";
+    consistencyScore: number;
+    consistencyTrendText: string;
+    summaryText: string;
+  };
+  
+  // Section 2: Work Summary
+  workSummary: {
+    totalHuntingHours: number;
+    totalLearningHours: number;
+    totalSessions: number;
+    targetsCount: number;
+    topicsCount: number;
+    reportsSubmitted: number;
+    validReports: number;
+    targetsWorkedOn: string[];
+    topicsStudied: string[];
+  };
+  
+  // Section 3: Comparison
+  comparison: {
+    huntingHours: ComparisonMetric;
+    learningHours: ComparisonMetric;
+    consistency: ComparisonMetric;
+    reportsSubmitted: ComparisonMetric;
+    validReports: ComparisonMetric;
+  };
+  
+  // Section 4: Top Targets
+  topTargetsRanked: TargetRanking[];
+  
+  // Section 5: Top Learning
+  topLearningRanked: TopicRanking[];
+  
+  // Section 6: Discoveries
+  discoveries: {
+    text: string;
+    confidence: "High" | "Medium" | "Low";
+  }[];
+  
+  // Section 7: Habit Review
+  habitReview: HabitReviewDetail;
+  
+  // Section 8: Achievements
+  achievements: string[];
+  
+  // Section 9: Recommendations
+  recommendations: string[];
+  
+  // Section 10: Next Week Snapshot
+  nextWeekSnapshot: {
+    focusTarget: string;
+    focusTopic: string;
+    consistencyGoal: string;
+    planningSummary: string;
+  };
+};
+
+export function getDatesForWeek(year: number, week: number) {
+  let baseDate = new Date(Date.UTC(year, 0, 4));
+  baseDate = setISOWeekYear(baseDate, year);
+  const targetDate = setISOWeek(baseDate, week);
+  const start = startOfISOWeek(targetDate);
+  const end = endOfISOWeek(targetDate);
+  return { start, end };
+}
+
+function parseTimeToMinutes(timeStr?: string | null): number | null {
+  if (!timeStr) return null;
+  const match = timeStr.match(/^([0-1]?[0-9]|2[0-3]):([0-5][0-9])$/);
+  if (!match) return null;
+  const [_, h, m] = match;
+  return Number(h) * 60 + Number(m);
+}
+
+function formatMinutesToTime(totalMin: number): string {
+  const h = Math.floor(totalMin / 60) % 24;
+  const m = Math.round(totalMin % 60);
+  return `${String(h).padStart(2, "0")}:${String(m).padStart(2, "0")}`;
+}
+
+function calculateSleepForEntry(bedTimeStr?: string | null, wakeTimeStr?: string | null): number | null {
+  const bedMin = parseTimeToMinutes(bedTimeStr);
+  const wakeMin = parseTimeToMinutes(wakeTimeStr);
+  if (bedMin === null || wakeMin === null) return null;
+  return bedMin > wakeMin ? (wakeMin + 1440 - bedMin) / 60 : (wakeMin - bedMin) / 60;
+}
+
+function averageTimeOfStatus(times: string[]): string {
+  const parsed = times.map(parseTimeToMinutes).filter((t): t is number => t !== null);
+  if (parsed.length === 0) return "N/A";
+  
+  let sumRelative = 0;
+  for (const min of parsed) {
+    const rel = min >= 720 ? min - 1440 : min;
+    sumRelative += rel;
+  }
+  
+  const avgRel = sumRelative / parsed.length;
+  const finalMin = avgRel < 0 ? avgRel + 1440 : avgRel;
+  return formatMinutesToTime(finalMin);
+}
+
+function calculateConsistencyForWeek(weekStart: Date, entries: any[], allSessions: any[]) {
+  let habitSum = 0;
+  let workoutSum = 0;
+  let readingSum = 0;
+  let loggingSum = 0;
+  let sessionSum = 0;
+  
+  for (let i = 0; i < 7; i++) {
+    const d = new Date(weekStart);
+    d.setDate(d.getDate() + i);
+    const dateStr = d.toISOString().split("T")[0];
+    
+    const entry = entries.find(e => e.date === dateStr);
+    
+    const bedTimeSet = entry?.bed_time ? 1 : 0;
+    const wakeTimeSet = entry?.wake_time ? 1 : 0;
+    const workoutSet = entry?.workout ? 1 : 0;
+    const readingSet = entry?.reading ? 1 : 0;
+    const logSet = entry?.notes && entry.notes.trim() !== "" ? 1 : 0;
+    
+    const completedHabits = bedTimeSet + wakeTimeSet + workoutSet + readingSet + logSet;
+    const habitRate = completedHabits / 5;
+    
+    habitSum += habitRate;
+    workoutSum += workoutSet;
+    readingSum += readingSet;
+    loggingSum += logSet;
+    
+    const hasSession = allSessions.some(
+      s => s.started_at && s.started_at.split("T")[0] === dateStr
+    );
+    sessionSum += hasSession ? 1 : 0;
+  }
+  
+  const avgHabitRate = habitSum / 7;
+  const avgWorkoutRate = workoutSum / 7;
+  const avgReadingRate = readingSum / 7;
+  const avgLoggingRate = loggingSum / 7;
+  const avgSessionRate = sessionSum / 7;
+  
+  return Math.round(
+    (avgHabitRate * 0.4 +
+      avgWorkoutRate * 0.15 +
+      avgReadingRate * 0.15 +
+      avgLoggingRate * 0.15 +
+      avgSessionRate * 0.15) *
+      100
+  );
+}
+
+export async function generateWeeklyReviewReport(year: number, week: number): Promise<WeeklyReviewReport> {
+  const { start, end } = getDatesForWeek(year, week);
+  const startStr = start.toISOString().split("T")[0];
+  const endStr = end.toISOString().split("T")[0];
+  
+  const prevWeekDate = subWeeks(start, 1);
+  const prevStart = startOfISOWeek(prevWeekDate);
+  const prevEnd = endOfISOWeek(prevWeekDate);
+  const prevStartStr = prevStart.toISOString().split("T")[0];
+  const prevEndStr = prevEnd.toISOString().split("T")[0];
+
+  const start30d = subDays(start, 30);
+  const end30d = subDays(start, 1);
+  const start30dStr = start30d.toISOString().split("T")[0];
+  const end30dStr = end30d.toISOString().split("T")[0];
+
+  // 1. Fetch data
+  const [
+    allEntries,
+    allTargetSessions,
+    allLearningSessions,
+    allFindings,
+    allTargets,
+  ] = await Promise.all([
+    getAllDailyEntries(),
+    getAllSessions(),
+    getAllLearningSessions(),
+    getAllFindings(),
+    getAllTargets(),
+  ]);
+
+  // 2. Filter this week data
+  const thisWeekEntries = allEntries.filter(e => e.date >= startStr && e.date <= endStr);
+  const thisWeekTargetSessions = allTargetSessions.filter(s => s.started_at && s.started_at.split("T")[0] >= startStr && s.started_at.split("T")[0] <= endStr);
+  const thisWeekLearningSessions = allLearningSessions.filter(s => s.started_at && s.started_at.split("T")[0] >= startStr && s.started_at.split("T")[0] <= endStr);
+  const thisWeekFindings = allFindings.filter(f => f.submitted_at && f.submitted_at >= startStr && f.submitted_at <= endStr);
+  const thisWeekAllSessionsCombined = [
+    ...thisWeekTargetSessions.map(s => ({ started_at: s.started_at })),
+    ...thisWeekLearningSessions.map(s => ({ started_at: s.started_at })),
+  ];
+
+  // 3. Filter previous week data
+  const prevWeekEntries = allEntries.filter(e => e.date >= prevStartStr && e.date <= prevEndStr);
+  const prevWeekTargetSessions = allTargetSessions.filter(s => s.started_at && s.started_at.split("T")[0] >= prevStartStr && s.started_at.split("T")[0] <= prevEndStr);
+  const prevWeekLearningSessions = allLearningSessions.filter(s => s.started_at && s.started_at.split("T")[0] >= prevStartStr && s.started_at.split("T")[0] <= prevEndStr);
+  const prevWeekFindings = allFindings.filter(f => f.submitted_at && f.submitted_at >= prevStartStr && f.submitted_at <= prevEndStr);
+  const prevWeekAllSessionsCombined = [
+    ...prevWeekTargetSessions.map(s => ({ started_at: s.started_at })),
+    ...prevWeekLearningSessions.map(s => ({ started_at: s.started_at })),
+  ];
+
+  // 4. Filter 30-day baseline data
+  const entries30d = allEntries.filter(e => e.date >= start30dStr && e.date <= end30dStr);
+  const targetSessions30d = allTargetSessions.filter(s => s.started_at && s.started_at.split("T")[0] >= start30dStr && s.started_at.split("T")[0] <= end30dStr);
+  const learningSessions30d = allLearningSessions.filter(s => s.started_at && s.started_at.split("T")[0] >= start30dStr && s.started_at.split("T")[0] <= end30dStr);
+  const findings30d = allFindings.filter(f => f.submitted_at && f.submitted_at >= start30dStr && f.submitted_at <= end30dStr);
+  const sessionsCombined30d = [
+    ...targetSessions30d.map(s => ({ started_at: s.started_at })),
+    ...learningSessions30d.map(s => ({ started_at: s.started_at })),
+  ];
+
+  // ================= SECTION 2: WORK SUMMARY =================
+  const totalHuntingHours = thisWeekTargetSessions.reduce((acc, s) => acc + (s.duration || 0), 0) / 60;
+  const totalLearningHours = thisWeekLearningSessions.reduce((acc, s) => acc + (s.duration || 0), 0) / 60;
+  const totalSessions = thisWeekTargetSessions.length + thisWeekLearningSessions.length;
+  
+  const targetsSet = new Set(thisWeekTargetSessions.map(s => s.target));
+  const topicsSet = new Set(thisWeekLearningSessions.map(s => s.topicName));
+  const targetsWorkedOn = Array.from(targetsSet).filter(Boolean) as string[];
+  const topicsStudied = Array.from(topicsSet).filter(Boolean) as string[];
+  
+  const reportsSubmitted = thisWeekFindings.length;
+  const validReports = thisWeekFindings.filter(f => f.status === "Valid").length;
+
+  const consistencyScore = calculateConsistencyForWeek(start, thisWeekEntries, thisWeekAllSessionsCombined);
+
+  // ================= PREVIOUS WEEK VALUES =================
+  const prevHuntingHours = prevWeekTargetSessions.reduce((acc, s) => acc + (s.duration || 0), 0) / 60;
+  const prevLearningHours = prevWeekLearningSessions.reduce((acc, s) => acc + (s.duration || 0), 0) / 60;
+  const prevReportsSubmitted = prevWeekFindings.length;
+  const prevValidReports = prevWeekFindings.filter(f => f.status === "Valid").length;
+  const prevConsistency = calculateConsistencyForWeek(prevStart, prevWeekEntries, prevWeekAllSessionsCombined);
+
+  // ================= 30-DAY AVERAGE BASELINE (SCALED WEEKLY) =================
+  const huntingHours30d = targetSessions30d.reduce((acc, s) => acc + (s.duration || 0), 0) / 60;
+  const learningHours30d = learningSessions30d.reduce((acc, s) => acc + (s.duration || 0), 0) / 60;
+  const reports30d = findings30d.length;
+  const valid30d = findings30d.filter(f => f.status === "Valid").length;
+
+  const avgHuntingHoursWeekly30d = (huntingHours30d / 30) * 7;
+  const avgLearningHoursWeekly30d = (learningHours30d / 30) * 7;
+  const avgReportsWeekly30d = (reports30d / 30) * 7;
+  const avgValidWeekly30d = (valid30d / 30) * 7;
+
+  // Consistency average 30d
+  let sumDailyConsistency30d = 0;
+  for (let i = 0; i < 30; i++) {
+    const d = new Date(start30d);
+    d.setDate(d.getDate() + i);
+    const dateStr = d.toISOString().split("T")[0];
+    const score = calculateConsistencyForWeek(d, entries30d, sessionsCombined30d);
+    sumDailyConsistency30d += score;
+  }
+  const avgConsistency30d = Math.round(sumDailyConsistency30d / 30);
+
+  // Helper function to build ComparisonMetric
+  const buildMetric = (thisVal: number, prevVal: number, avg30dVal: number): ComparisonMetric => {
+    const prevWeekDiffPercent = prevVal === 0 
+      ? (thisVal > 0 ? 100 : 0) 
+      : Math.round(((thisVal - prevVal) / prevVal) * 100);
+    
+    const avg30dDiffPercent = avg30dVal === 0
+      ? (thisVal > 0 ? 100 : 0)
+      : Math.round(((thisVal - avg30dVal) / avg30dVal) * 100);
+
+    return {
+      thisWeekValue: Math.round(thisVal * 10) / 10,
+      prevWeekValue: Math.round(prevVal * 10) / 10,
+      prevWeekDiffPercent,
+      avg30dValue: Math.round(avg30dVal * 10) / 10,
+      avg30dDiffPercent,
+    };
+  };
+
+  // ================= SECTION 3: COMPARISON =================
+  const comparison = {
+    huntingHours: buildMetric(totalHuntingHours, prevHuntingHours, avgHuntingHoursWeekly30d),
+    learningHours: buildMetric(totalLearningHours, prevLearningHours, avgLearningHoursWeekly30d),
+    consistency: {
+      thisWeekValue: consistencyScore,
+      prevWeekValue: prevConsistency,
+      prevWeekDiffPercent: consistencyScore - prevConsistency, // show raw difference for scores
+      avg30dValue: avgConsistency30d,
+      avg30dDiffPercent: consistencyScore - avgConsistency30d,
+    },
+    reportsSubmitted: buildMetric(reportsSubmitted, prevReportsSubmitted, avgReportsWeekly30d),
+    validReports: buildMetric(validReports, prevValidReports, avgValidWeekly30d),
+  };
+
+  // ================= SECTION 4: TOP TARGETS =================
+  const targetsRankedMap: Record<string, { name: string; hours: number; reports: number; valid: number }> = {};
+  
+  thisWeekTargetSessions.forEach(s => {
+    if (!s.target) return;
+    if (!targetsRankedMap[s.target]) {
+      targetsRankedMap[s.target] = { name: s.target, hours: 0, reports: 0, valid: 0 };
+    }
+    targetsRankedMap[s.target].hours += (s.duration || 0) / 60;
+  });
+
+  thisWeekFindings.forEach(f => {
+    const targetName = allTargets.find(t => t.id === f.target_id)?.name;
+    if (!targetName) return;
+    if (!targetsRankedMap[targetName]) {
+      targetsRankedMap[targetName] = { name: targetName, hours: 0, reports: 0, valid: 0 };
+    }
+    targetsRankedMap[targetName].reports += 1;
+    if (f.status === "Valid") {
+      targetsRankedMap[targetName].valid += 1;
+    }
+  });
+
+  const topTargetsRanked: TargetRanking[] = Object.values(targetsRankedMap)
+    .map(t => ({
+      name: t.name,
+      hours: Math.round(t.hours * 10) / 10,
+      reportsSubmitted: t.reports,
+      validReports: t.valid,
+      hoursPerValidReport: t.valid === 0 ? "N/A" : Math.round((t.hours / t.valid) * 10) / 10,
+    }))
+    .sort((a, b) => b.hours - a.hours);
+
+  // ================= SECTION 5: TOP LEARNING =================
+  const learningRankedMap: Record<string, { name: string; hours: number; sessions: number; latest: string }> = {};
+
+  thisWeekLearningSessions.forEach(s => {
+    if (!s.topicName) return;
+    if (!learningRankedMap[s.topicName]) {
+      learningRankedMap[s.topicName] = { name: s.topicName, hours: 0, sessions: 0, latest: "" };
+    }
+    learningRankedMap[s.topicName].hours += (s.duration || 0) / 60;
+    learningRankedMap[s.topicName].sessions += 1;
+    if (s.started_at && s.started_at > learningRankedMap[s.topicName].latest) {
+      learningRankedMap[s.topicName].latest = s.started_at;
+    }
+  });
+
+  const dayNames = ["Sunday", "Monday", "Tuesday", "Wednesday", "Thursday", "Friday", "Saturday"];
+  const topLearningRanked: TopicRanking[] = Object.values(learningRankedMap)
+    .map(t => {
+      let friendlyLastStudied = "N/A";
+      if (t.latest) {
+        const lastDate = new Date(t.latest);
+        friendlyLastStudied = dayNames[lastDate.getUTCDay()];
+      }
+      return {
+        name: t.name,
+        hours: Math.round(t.hours * 10) / 10,
+        sessions: t.sessions,
+        lastStudied: friendlyLastStudied,
+      };
+    })
+    .sort((a, b) => b.hours - a.hours);
+
+  // ================= SECTION 7: HABIT REVIEW =================
+  const readingDays = thisWeekEntries.filter(e => e.reading === 1).length;
+  const prevReadingDays = prevWeekEntries.filter(e => e.reading === 1).length;
+  const avgReadingDays30d = (entries30d.filter(e => e.reading === 1).length / 30) * 7;
+
+  const workoutCount = thisWeekEntries.filter(e => e.workout === 1).length;
+  const prevWorkoutCount = prevWeekEntries.filter(e => e.workout === 1).length;
+  const avgWorkoutCount30d = (entries30d.filter(e => e.workout === 1).length / 30) * 7;
+
+  // Sleep hours averages
+  const getSleepForEntries = (entries: any[]) => {
+    const hours = entries
+      .map(e => calculateSleepForEntry(e.bed_time, e.wake_time))
+      .filter((h): h is number => h !== null);
+    if (hours.length === 0) return 0;
+    return hours.reduce((sum, h) => sum + h, 0) / hours.length;
+  };
+
+  const avgSleepHours = getSleepForEntries(thisWeekEntries);
+  const prevAvgSleepHours = getSleepForEntries(prevWeekEntries);
+  const avgSleepHours30d = getSleepForEntries(entries30d);
+
+  // Average bed and wake times
+  const bedTimes = thisWeekEntries.map(e => e.bed_time).filter(Boolean) as string[];
+  const wakeTimes = thisWeekEntries.map(e => e.wake_time).filter(Boolean) as string[];
+
+  const avgBedTime = averageTimeOfStatus(bedTimes);
+  const avgWakeTime = averageTimeOfStatus(wakeTimes);
+
+  // Completion rates
+  const getCompletionRate = (entries: any[]) => {
+    if (entries.length === 0) return 0;
+    let completed = 0;
+    let total = 0;
+    entries.forEach(e => {
+      completed += (e.bed_time ? 1 : 0) + (e.wake_time ? 1 : 0) + (e.workout ? 1 : 0) + (e.reading ? 1 : 0) + (e.notes && e.notes.trim() !== "" ? 1 : 0);
+      total += 5;
+    });
+    return Math.round((completed / total) * 100);
+  };
+
+  const completionRate = getCompletionRate(thisWeekEntries);
+
+  const habitReview: HabitReviewDetail = {
+    readingDays,
+    readingDaysDiffPrev: readingDays - prevReadingDays,
+    readingDaysDiff30d: Math.round((readingDays - avgReadingDays30d) * 10) / 10,
+    workoutCount,
+    workoutCountDiffPrev: workoutCount - prevWorkoutCount,
+    workoutCountDiff30d: Math.round((workoutCount - avgWorkoutCount30d) * 10) / 10,
+    avgSleepHours: Math.round(avgSleepHours * 10) / 10,
+    avgSleepHoursDiffPrev: Math.round((avgSleepHours - prevAvgSleepHours) * 10) / 10,
+    avgSleepHoursDiff30d: Math.round((avgSleepHours - avgSleepHours30d) * 10) / 10,
+    avgBedTime,
+    avgWakeTime,
+    completionRate,
+    consistencyScore,
+  };
+
+  // ================= SECTION 6: DISCOVERIES =================
+  const diagnostics = await getCorrelationDiagnostics();
+  const discoveries: { text: string; confidence: "High" | "Medium" | "Low" }[] = [];
+  const recommendations: string[] = [];
+
+  if (diagnostics.insights.sleep?.status === "success") {
+    const sleep = diagnostics.insights.sleep;
+    if (sleep.impact > 0) {
+      discoveries.push({
+        text: `Optimal sleep (7-8h) increased average daily hunting by ${sleep.impact.toFixed(1)}h compared to short sleep days (<6h).`,
+        confidence: sleep.confidence || "Low",
+      });
+      recommendations.push("Maintain a 7-8 hour sleep schedule to optimize next-day focus and session duration.");
+    }
+  }
+
+  if (diagnostics.insights.reading?.status === "success") {
+    const reading = diagnostics.insights.reading;
+    if (reading.reading && reading.nonReading) {
+      const diff = reading.reading.avgSessionLength - reading.nonReading.avgSessionLength;
+      if (diff > 0) {
+        discoveries.push({
+          text: `Reading days averaged ${(diff * 60).toFixed(0)} minutes longer hunting sessions compared to non-reading days.`,
+          confidence: reading.confidence || "Low",
+        });
+        recommendations.push("Increase reading frequency before starting operations to extend session capacity.");
+      }
+    }
+  }
+
+  if (diagnostics.insights.workout?.status === "success") {
+    const workout = diagnostics.insights.workout;
+    if (workout.workout && workout.noWorkout) {
+      const diff = workout.workout.avgConsistency - workout.noWorkout.avgConsistency;
+      if (Math.abs(diff) < 5) {
+        discoveries.push({
+          text: "Workouts show no measurable relationship to total daily productivity.",
+          confidence: workout.confidence || "Low",
+        });
+        recommendations.push("Continue workouts to maintain health, though direct productivity links are minor.");
+      } else if (diff > 0) {
+        discoveries.push({
+          text: `Workout days correlated with a ${diff.toFixed(0)}% increase in habit completion consistency.`,
+          confidence: workout.confidence || "Low",
+        });
+        recommendations.push("Maintain workout schedules to keep structural habit enforcement high.");
+      }
+    }
+  }
+
+  if (diagnostics.insights.bedTime?.status === "success") {
+    const bed = diagnostics.insights.bedTime;
+    const hours = [
+      { label: "before 11 PM", val: bed.avgHuntingBefore11 },
+      { label: "between 11 PM-12 AM", val: bed.avgHunting11to12 },
+      { label: "after Midnight", val: bed.avgHuntingAfterMidnight },
+    ].sort((a, b) => b.val - a.val);
+    
+    if (hours[0].val > 0) {
+      discoveries.push({
+        text: `Bedtimes ${hours[0].label} produced the highest average hunting hours (${hours[0].val.toFixed(1)}h).`,
+        confidence: bed.confidence || "Low",
+      });
+      if (hours[0].label === "before 11 PM") {
+        recommendations.push("Maintain current bedtime before 11 PM to capture maximum next-day productivity.");
+      }
+    }
+  }
+
+  if (diagnostics.insights.wakeTime?.status === "success") {
+    const wake = diagnostics.insights.wakeTime;
+    if (wake.earlyWake && wake.lateWake) {
+      const diff = wake.earlyWake.avgHunting - wake.lateWake.avgHunting;
+      if (diff > 0) {
+        discoveries.push({
+          text: `Early wake times (before median ${wake.medianWakeTime}) produced ${diff.toFixed(1)}h more average hunting than late wake times.`,
+          confidence: wake.confidence || "Low",
+        });
+        recommendations.push(`Aim to wake up before ${wake.medianWakeTime} to maximize morning productivity windows.`);
+      }
+    }
+  }
+
+  if (diagnostics.insights.learning?.status === "success" && diagnostics.insights.learning.topics) {
+    const topTopic = diagnostics.insights.learning.topics[0];
+    if (topTopic && topTopic.attributedReports > 0) {
+      discoveries.push({
+        text: `Studies on topic '${topTopic.name}' preceded ${topTopic.attributedReports} findings within a 7-day window.`,
+        confidence: diagnostics.insights.learning.confidence || "Low",
+      });
+      recommendations.push(`Rotate focus back to learning topic '${topTopic.name}' to exploit recently acquired techniques.`);
+    }
+  }
+
+  // Target rotation recommendations
+  for (const target of allTargets) {
+    const targetSessionLogs = allTargetSessions.filter(s => s.target_id === target.id);
+    const targetFindingLogs = allFindings.filter(f => f.target_id === target.id);
+    const targetHours = targetSessionLogs.reduce((sum, s) => sum + (s.duration || 0), 0) / 60;
+    
+    if (targetHours >= 15 && targetFindingLogs.length === 0 && target.status !== "Completed") {
+      recommendations.push(`Target '${target.name}' has received ${targetHours.toFixed(1)} hours of hunting without findings. Consider rotating targets.`);
+    }
+  }
+
+  if (recommendations.length === 0) {
+    recommendations.push("Establish regular bedtime schedules to structure morning operations.");
+    recommendations.push("Focus on logging reconnaissance data explicitly in daily notes.");
+  }
+
+  // ================= SECTION 8: ACHIEVEMENTS =================
+  const achievements: string[] = [];
+  const weeksMap: Record<string, { year: number; week: number; start: Date; huntingHours: number; learningHours: number; reportsCount: number; entries: any[]; sessions: any[] }> = {};
+  
+  for (const entry of allEntries) {
+    const d = new Date(entry.date);
+    const w = getISOWeek(d);
+    const y = getISOWeekYear(d);
+    const key = `${y}-${w}`;
+    if (!weeksMap[key]) {
+      const { start: wkStart } = getDatesForWeek(y, w);
+      weeksMap[key] = { year: y, week: w, start: wkStart, huntingHours: 0, learningHours: 0, reportsCount: 0, entries: [], sessions: [] };
+    }
+    weeksMap[key].entries.push(entry);
+  }
+
+  for (const session of allTargetSessions) {
+    if (!session.started_at) continue;
+    const d = new Date(session.started_at);
+    const w = getISOWeek(d);
+    const y = getISOWeekYear(d);
+    const key = `${y}-${w}`;
+    if (!weeksMap[key]) {
+      const { start: wkStart } = getDatesForWeek(y, w);
+      weeksMap[key] = { year: y, week: w, start: wkStart, huntingHours: 0, learningHours: 0, reportsCount: 0, entries: [], sessions: [] };
+    }
+    weeksMap[key].huntingHours += (session.duration || 0) / 60;
+    weeksMap[key].sessions.push(session);
+  }
+
+  for (const session of allLearningSessions) {
+    if (!session.started_at) continue;
+    const d = new Date(session.started_at);
+    const w = getISOWeek(d);
+    const y = getISOWeekYear(d);
+    const key = `${y}-${w}`;
+    if (!weeksMap[key]) {
+      const { start: wkStart } = getDatesForWeek(y, w);
+      weeksMap[key] = { year: y, week: w, start: wkStart, huntingHours: 0, learningHours: 0, reportsCount: 0, entries: [], sessions: [] };
+    }
+    weeksMap[key].learningHours += (session.duration || 0) / 60;
+    weeksMap[key].sessions.push(session);
+  }
+
+  for (const finding of allFindings) {
+    if (!finding.submitted_at) continue;
+    const d = new Date(finding.submitted_at);
+    const w = getISOWeek(d);
+    const y = getISOWeekYear(d);
+    const key = `${y}-${w}`;
+    if (!weeksMap[key]) {
+      const { start: wkStart } = getDatesForWeek(y, w);
+      weeksMap[key] = { year: y, week: w, start: wkStart, huntingHours: 0, learningHours: 0, reportsCount: 0, entries: [], sessions: [] };
+    }
+    weeksMap[key].reportsCount += 1;
+  }
+
+  const weeksList = Object.values(weeksMap).map(wk => {
+    const wkAllSessions = [
+      ...allTargetSessions.filter(s => s.started_at && s.started_at.split("T")[0] >= wk.start.toISOString().split("T")[0] && s.started_at.split("T")[0] <= endStr),
+      ...allLearningSessions.filter(s => s.started_at && s.started_at.split("T")[0] >= wk.start.toISOString().split("T")[0] && s.started_at.split("T")[0] <= endStr),
+    ];
+    const score = calculateConsistencyForWeek(wk.start, wk.entries, wkAllSessions);
+    return { ...wk, consistencyScore: score };
+  });
+
+  const otherWeeks = weeksList.filter(wk => !(wk.year === year && wk.week === week));
+
+  if (totalHuntingHours > 0 && otherWeeks.every(wk => totalHuntingHours >= wk.huntingHours)) {
+    achievements.push(`New record for highest weekly hunting hours reached: ${totalHuntingHours.toFixed(1)} hours.`);
+  }
+  if (totalLearningHours > 0 && otherWeeks.every(wk => totalLearningHours >= wk.learningHours)) {
+    achievements.push(`New record for highest weekly learning hours reached: ${totalLearningHours.toFixed(1)} hours.`);
+  }
+  if (consistencyScore > 0 && otherWeeks.every(wk => consistencyScore >= wk.consistencyScore)) {
+    achievements.push(`Highest weekly consistency score achieved in project history: ${consistencyScore}%.`);
+  }
+  if (reportsSubmitted > 0 && otherWeeks.every(wk => reportsSubmitted >= wk.reportsCount)) {
+    achievements.push(`Most reports submitted in a single week in project history: ${reportsSubmitted} reports.`);
+  }
+
+  if (thisWeekTargetSessions.length > 0) {
+    const sortedThisWeekSessions = [...thisWeekTargetSessions].sort((a, b) => (b.duration || 0) - (a.duration || 0));
+    const longestThisWeek = sortedThisWeekSessions[0];
+    const longestHours = (longestThisWeek.duration || 0) / 60;
+    
+    const sortedAllTimeSessions = [...allTargetSessions].sort((a, b) => (b.duration || 0) - (a.duration || 0));
+    const longestAllTime = sortedAllTimeSessions[0];
+    const longestAllTimeHours = longestAllTime ? (longestAllTime.duration || 0) / 60 : 0;
+    
+    if (longestHours > 0 && longestHours >= longestAllTimeHours) {
+      achievements.push(`New all-time record for longest single hunting session: ${longestHours.toFixed(1)}h on target '${longestThisWeek.target}'.`);
+    } else {
+      achievements.push(`Longest hunting session this week: ${longestHours.toFixed(1)}h on target '${longestThisWeek.target}'.`);
+    }
+  }
+
+  if (achievements.length === 0) {
+    achievements.push("No new performance benchmarks exceeded this week. Maintain current operations.");
+  }
+
+  // ================= SECTION 10: NEXT WEEK SNAPSHOT =================
+  const focusTarget = topTargetsRanked[0]?.name 
+    ? `Focus on Target '${topTargetsRanked[0].name}' as it represents the highest operational investment.` 
+    : "Determine and register a primary target for the upcoming cycle.";
+
+  const focusTopic = topLearningRanked[0]?.name
+    ? `Continue study of Topic '${topLearningRanked[0].name}' to support active target research.`
+    : "Establish a primary learning topic in Settings/Learning to structure next week's studies.";
+
+  const consistencyGoal = consistencyScore < 75
+    ? "Structure routine to improve consistency score back above the 75% target threshold."
+    : `Maintain current bedtime and wake schedules to preserve high consistency score (${consistencyScore}%).`;
+
+  const planningSummary = `Data suggests allocating primary sessions to '${topTargetsRanked[0]?.name || "N/A"}' and maintaining habit tracking completeness above 75%.`;
+
+  const nextWeekSnapshot = {
+    focusTarget,
+    focusTopic,
+    consistencyGoal,
+    planningSummary,
+  };
+
+  // ================= SECTION 1: EXECUTIVE SUMMARY =================
+  let consistencyState: "green" | "amber" | "red" = "red";
+  if (consistencyScore >= 75) consistencyState = "green";
+  else if (consistencyScore >= 40) consistencyState = "amber";
+
+  let consistencyTrendText = "Consistency declined compared to last week.";
+  const consistencyDiffPrev = comparison.consistency.prevWeekDiffPercent;
+  if (consistencyDiffPrev > 0) {
+    consistencyTrendText = "Overall this week was more consistent than last week.";
+  } else if (consistencyDiffPrev === 0) {
+    consistencyTrendText = "Consistency remained stable compared to last week.";
+  }
+
+  const summaryText = `This week yielded ${totalHuntingHours.toFixed(1)}h of hunting and ${totalLearningHours.toFixed(1)}h of studying across ${totalSessions} sessions. Habit compliance ended with a consistency score of ${consistencyScore}%.`;
+
+  // Compile final report payload
+  const report: WeeklyReviewReport = {
+    year,
+    weekNumber: week,
+    startDate: startStr,
+    endDate: endStr,
+    executiveSummary: {
+      consistencyState,
+      consistencyScore,
+      consistencyTrendText,
+      summaryText,
+    },
+    workSummary: {
+      totalHuntingHours: Math.round(totalHuntingHours * 10) / 10,
+      totalLearningHours: Math.round(totalLearningHours * 10) / 10,
+      totalSessions,
+      targetsCount: targetsWorkedOn.length,
+      topicsCount: topicsStudied.length,
+      reportsSubmitted,
+      validReports,
+      targetsWorkedOn,
+      topicsStudied,
+    },
+    comparison,
+    topTargetsRanked: topTargetsRanked.slice(0, 5),
+    topLearningRanked: topLearningRanked.slice(0, 5),
+    discoveries: discoveries.slice(0, 5),
+    habitReview,
+    achievements: achievements.slice(0, 5),
+    recommendations: recommendations.slice(0, 5),
+    nextWeekSnapshot,
+  };
+
+  // Save review in cache
+  await saveWeeklyReview(year, week, startStr, endStr, JSON.stringify(report));
+
+  return report;
+}

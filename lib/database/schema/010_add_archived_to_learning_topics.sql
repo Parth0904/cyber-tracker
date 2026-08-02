@@ -1,0 +1,1 @@
+ALTER TABLE learning_topics ADD COLUMN archived INTEGER DEFAULT 0;

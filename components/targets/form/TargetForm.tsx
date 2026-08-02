@@ -52,7 +52,7 @@ export default function TargetForm({
 
       <TargetInfo
         name={target.name}
-        platform={target.platform}
+        platform={target.platform ?? ""}
         onChange={(field, value) => update(field as any, value)}
       />
 
@@ -63,13 +63,13 @@ export default function TargetForm({
       />
 
       <TargetStatus
-        status={target.status}
-        priority={target.priority}
+        status={target.status ?? "Recon"}
+        priority={target.priority ?? "Medium"}
         onChange={(field, value) => update(field as any, value)}
       />
 
       <TargetNotes
-        notes={target.notes}
+        notes={target.notes ?? ""}
         onChange={(value) =>
           update("notes", value)
         }

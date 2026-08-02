@@ -1,58 +1,89 @@
 import { NextResponse } from "next/server";
-
-import {
-  getEntries,
-  getTodayEntry,
-} from "@/lib/repositories/dailyEntries";
-
-import {
-  getActivities,
-  getTodayActivities,
-} from "@/lib/repositories/activities";
-
-import {
-  generateDashboard,
-} from "@/lib/dashboard";
-
-import { DailyEntry } from "@/lib/types";
+import { getTodayEntry } from "@/lib/repositories/dailyEntries";
+import { calculateConsistency } from "@/lib/services/consistency";
+import { getActiveSessionWithAbandonedStatus } from "@/lib/repositories/targetSessions";
+import { getActiveLearningSessionWithAbandonedStatus } from "@/lib/repositories/learning";
+import { getAllTargets } from "@/lib/repositories/targets";
+import { calculateCompletion } from "@/lib/completion";
 
 export async function GET() {
+  const today = new Date().toISOString().split("T")[0];
+  const entry = (await getTodayEntry(today)) || null;
 
-  const today =
-    new Date()
-      .toISOString()
-      .split("T")[0];
+  // 1. Calculate completion state
+  const completionInfo = calculateCompletion(entry);
 
-  const defaultEntry: DailyEntry = {
-    date: today,
-    sleep_hours: 0,
-    bed_time: "",
-    reading: 0,
-    focus_feeling: "",
-    workout: 0,
-    steps: 0,
-    notes: "",
+  // 2. Fetch active session
+  const huntingActive = await getActiveSessionWithAbandonedStatus();
+  const learningActive = await getActiveLearningSessionWithAbandonedStatus();
+
+  let activeMapped = {
+    active: false,
+    id: null as number | null,
+    targetId: "",
+    targetName: "",
+    type: "",
+    description: "",
+    startedAt: "",
+    isAbandoned: false,
+    module: "",
   };
 
-  const todayEntry =
-    getTodayEntry(today) ??
-    defaultEntry;
+  if (huntingActive?.active) {
+    const activeSession = huntingActive.active;
+    activeMapped = {
+      active: true,
+      id: activeSession.id,
+      targetId: String(activeSession.target_id),
+      targetName: activeSession.target,
+      type: activeSession.type,
+      description: activeSession.description ?? "",
+      startedAt: activeSession.started_at,
+      isAbandoned: huntingActive.isAbandoned,
+      module: "Hunting",
+    };
+  } else if (learningActive) {
+    activeMapped = {
+      active: true,
+      id: learningActive.id,
+      targetId: "",
+      targetName: learningActive.topicName,
+      type: "Learning",
+      description: "",
+      startedAt: learningActive.startedAt,
+      isAbandoned: learningActive.isAbandoned,
+      module: "Learning",
+    };
+  }
 
-  const response =
-    generateDashboard(
+  // 3. Calculate dynamic consistency
+  const consistencyInfo = await calculateConsistency();
 
-      todayEntry,
+  // 4. Targets list for session engagement selector
+  const targets = await getAllTargets();
 
-      getEntries("all"),
-
-      getTodayActivities(today),
-
-      getActivities("all")
-
-    );
-
-  return NextResponse.json(
-    response
-  );
-
+  return NextResponse.json({
+    completion: {
+      percent: completionInfo.percent,
+      completedCount: 5 - completionInfo.missingCount,
+      totalCount: 5,
+      missing: completionInfo.missing,
+      entry: entry ? {
+        bedTime: entry.bed_time || "",
+        wakeTime: entry.wake_time || "",
+        workout: Boolean(entry.workout),
+        reading: Boolean(entry.reading),
+        notes: entry.notes || "",
+      } : {
+        bedTime: "",
+        wakeTime: "",
+        workout: false,
+        reading: false,
+        notes: "",
+      }
+    },
+    activeSession: activeMapped,
+    consistency: consistencyInfo,
+    targets: targets.map(t => ({ id: String(t.id), name: t.name })),
+  });
 }

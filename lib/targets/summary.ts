@@ -5,7 +5,7 @@ export function getTargetAge(
 ) {
 
   const started =
-    new Date(target.started_at);
+    new Date(target.started_at || new Date().toISOString());
 
   const now =
     new Date();

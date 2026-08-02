@@ -6,6 +6,7 @@ import { Button } from "@/components/ui/Button";
 import { Badge } from "@/components/ui/Badge";
 
 type ActiveSessionState = {
+  id: number;
   targetId: string;
   targetName: string;
   type: string;
@@ -22,11 +23,11 @@ export function SessionHudWidget() {
     // Poll local storage or session endpoint to capture status across tab navigations
     async function checkActiveSession() {
       try {
-        const res = await fetch("/api/targets/session");
+        const res = await fetch("/api/sessions");
         if (res.ok) {
           const data = await res.json();
           if (data?.active) {
-            setActive(data.session);
+            setActive(data.active);
             setIsPaused(data.isPaused || false);
           } else {
             setActive(null);
@@ -73,12 +74,13 @@ export function SessionHudWidget() {
 
       <div className="space-y-1 mb-3">
         <div className="flex justify-between items-center">
-          <span className="text-zinc-400 font-sans font-medium truncate max-w-[160px]">{active.targetName}</span>
-          <Badge variant="cyan">{active.type}</Badge>
+          <span className="text-zinc-400 font-sans font-medium truncate max-w-[160px]">
+            {active.targetName || (active as any).topicName || "Topic"}
+          </span>
+          <Badge variant={active.type === "Hunting" ? "cyan" : active.type === "Learning" ? "success" : "neutral"}>
+            {active.type}
+          </Badge>
         </div>
-        {active.description && (
-          <p className="text-[11px] text-zinc-500 font-sans truncate">{active.description}</p>
-        )}
       </div>
 
       <div className="grid grid-cols-2 gap-2">
@@ -91,7 +93,27 @@ export function SessionHudWidget() {
             <Pause size={10} fill="currentColor" /> Pause
           </Button>
         )}
-        <Button variant="primary" className="h-7 text-[10px] gap-1 bg-danger-rose text-white border-danger-rose hover:opacity-90">
+        <Button 
+          variant="primary" 
+          className="h-7 text-[10px] gap-1 bg-danger-rose text-white border-danger-rose hover:opacity-90"
+          onClick={async () => {
+            try {
+              const url = (active as any).module === "Learning"
+                ? `/api/learning/sessions/${active.id}/terminate`
+                : `/api/sessions/${active.id}/terminate`;
+              const res = await fetch(url, {
+                method: "PATCH",
+              });
+              if (res.ok) {
+                setActive(null);
+                window.dispatchEvent(new Event("refresh-consistency-theme"));
+                window.location.reload();
+              }
+            } catch (err) {
+              console.error("Terminate active session error:", err);
+            }
+          }}
+        >
           <Square size={10} fill="currentColor" /> Terminate
         </Button>
       </div>

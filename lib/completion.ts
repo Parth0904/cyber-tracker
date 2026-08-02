@@ -1,49 +1,57 @@
 type DailyEntry = {
-  sleep_hours: number;
   bed_time: string;
+  wake_time?: string;
+  workout: number;
   reading: number;
-  focus_feeling: string;
+  notes: string;
 };
 
 export function calculateCompletion(entry: DailyEntry | null) {
   if (!entry) {
     return {
       percent: 0,
-      missingCount: 4,
+      missingCount: 5,
       missing: [
-        "Sleep Hours",
         "Bed Time",
+        "Wake Time",
+        "Workout",
         "Reading",
-        "Focus Feeling",
+        "Daily Log",
       ],
     };
   }
 
   const fields = [
     {
-      name: "Sleep Hours",
-      value: entry.sleep_hours,
-    },
-    {
       name: "Bed Time",
       value: entry.bed_time,
+    },
+    {
+      name: "Wake Time",
+      value: entry.wake_time,
+    },
+    {
+      name: "Workout",
+      value: entry.workout,
     },
     {
       name: "Reading",
       value: entry.reading,
     },
     {
-      name: "Focus Feeling",
-      value: entry.focus_feeling,
+      name: "Daily Log",
+      value: entry.notes,
     },
   ];
 
   const missing = fields
     .filter((field) => {
-      if (typeof field.value === "number") {
-        return field.value === 0;
+      if (field.name === "Workout" || field.name === "Reading") {
+        return !field.value;
       }
-
+      if (field.name === "Daily Log") {
+        return !field.value || (typeof field.value === "string" && field.value.trim() === "");
+      }
       return !field.value;
     })
     .map((field) => field.name);

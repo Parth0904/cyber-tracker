@@ -8,6 +8,10 @@ import {
   restoreTarget,
 } from "@/lib/repositories/targets";
 
+import {
+  generateTargetOverview,
+} from "@/lib/targets/overview";
+
 export async function GET(
   _: NextRequest,
   {
@@ -20,11 +24,11 @@ export async function GET(
 ) {
   const { id } = await params;
 
-  const target = getTarget(
+  const overview = await generateTargetOverview(
     Number(id)
   );
 
-  if (!target) {
+  if (!overview) {
     return NextResponse.json(
       {
         error: "Target not found",
@@ -36,7 +40,7 @@ export async function GET(
   }
 
   return NextResponse.json(
-    target
+    overview
   );
 }
 
@@ -54,12 +58,12 @@ export async function PATCH(
   const body = await req.json();
 
   if (body.action === "archive" || body.status === "Archived" || body.archived === 1) {
-    archiveTarget(Number(id));
+    await archiveTarget(Number(id));
   } else if (body.action === "restore" || body.status === "Active" || body.archived === 0) {
-    restoreTarget(Number(id));
+    await restoreTarget(Number(id));
   } else {
-    const existing = getTarget(Number(id));
-    updateTarget(Number(id), {
+    const existing = await getTarget(Number(id));
+    await updateTarget(Number(id), {
       name: body.name !== undefined ? body.name : (existing?.name || ""),
       platform: body.platform !== undefined ? body.platform : (existing?.platform || ""),
       url: body.url !== undefined ? body.url : (existing?.url || null),
@@ -92,7 +96,7 @@ export async function DELETE(
   }
 ) {
   const { id } = await params;
-  deleteTarget(Number(id));
+  await deleteTarget(Number(id));
   return NextResponse.json({
     success: true,
   });

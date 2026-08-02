@@ -4,8 +4,8 @@ import * as React from "react";
 import Link from "next/link";
 import { usePathname } from "next/navigation";
 import { 
-  Terminal, Target, Layers, AlertCircle, 
-  FileText, Activity, Brain, Milestone, History 
+  Terminal, Target, Layers, 
+  FileText, Activity, Brain, History, BookOpen
 } from "lucide-react";
 
 export default function TopNavbar() {
@@ -15,13 +15,12 @@ export default function TopNavbar() {
   const navItems = [
     { href: "/", label: "Console", icon: <Terminal size={13} /> },
     { href: "/targets", label: "Targets", icon: <Target size={13} /> },
+    { href: "/learning", label: "Learning", icon: <BookOpen size={13} /> },
     { href: "/sessions", label: "Sessions", icon: <Layers size={13} /> },
-    { href: "/findings", label: "Findings", icon: <AlertCircle size={13} /> },
+    { href: "/reviews", label: "Weekly Review", icon: <FileText size={13} /> },
     { href: "/history", label: "History Log", icon: <History size={13} /> },
-    { href: "/reports", label: "Reports", icon: <FileText size={13} /> },
     { href: "/analytics", label: "Analytics", icon: <Activity size={13} /> },
     { href: "/insights", label: "AI Mentor", icon: <Brain size={13} /> },
-    { href: "/career", label: "Career Progress", icon: <Milestone size={13} /> },
   ];
 
   return (

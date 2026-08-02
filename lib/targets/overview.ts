@@ -18,28 +18,28 @@ import {
     buildTimeline,
 } from "./timeline";
 
-export function generateTargetOverview(
+export async function generateTargetOverview(
     id:number
 ){
 
     const target =
-        getTarget(id);
+        await getTarget(id);
 
     if(!target)
         return null;
 
     const sessions =
-        getSessions(id);
+        await getSessions(id);
 
     const findings =
-        getFindings(id);
+        await getFindings(id);
 
     return{
 
         target,
 
         statistics:
-            generateTargetStatistics(id),
+            await generateTargetStatistics(id),
 
         sessions,
 

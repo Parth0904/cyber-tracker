@@ -18,7 +18,7 @@ export async function PATCH(
   const { id } =
     await params;
 
-  terminateSession(
+  await terminateSession(
     Number(id)
   );
 

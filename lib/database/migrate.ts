@@ -20,7 +20,15 @@ for (const file of files) {
     "utf8"
   );
 
-  db.exec(sql);
+  try {
+    db.exec(sql);
+  } catch (err: any) {
+    if (err.message.includes("duplicate column name") || err.message.includes("already exists")) {
+      console.log(`Migration ${file} skipped: column or table already exists.`);
+    } else {
+      throw err;
+    }
+  }
 
 }
 

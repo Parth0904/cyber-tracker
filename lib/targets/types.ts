@@ -16,27 +16,27 @@ export type Target = {
 
   name: string;
 
-  platform: string;
+  platform?: string;
 
-  url: string | null;
+  url?: string | null;
 
-  status: TargetStatus;
+  status?: TargetStatus;
 
-  priority: TargetPriority;
+  priority?: TargetPriority;
 
-  started_at: string;
+  started_at?: string;
 
-  last_activity: string | null;
+  last_activity?: string | null;
 
-  notes: string;
+  notes?: string;
 
-  category: string | null;
+  category?: string | null;
 
-  scope_url: string | null;
+  scope_url?: string | null;
 
-  program_url: string | null;
+  program_url?: string | null;
 
-  created_by: string | null;
+  created_by?: string | null;
 
-  archived: number;
+  archived?: number;
 };

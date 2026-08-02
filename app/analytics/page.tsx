@@ -2,8 +2,8 @@
 
 import * as React from "react";
 import { 
-  BarChart3, TrendingUp, DollarSign, Clock, ShieldAlert, 
-  Target, Lightbulb, Zap, HelpCircle, Activity 
+  Activity, Clock, Layers, Target, BookOpen, AlertCircle, 
+  Award, TrendingUp, Calendar, ChevronUp, ChevronDown, CheckCircle2, Moon, AwardIcon
 } from "lucide-react";
 import { Panel } from "@/components/ui/Panel";
 import { Button } from "@/components/ui/Button";
@@ -12,276 +12,447 @@ import { EmptyState } from "@/components/ui/EmptyState";
 import LineChart from "@/components/charts/LineChart";
 import BarChart from "@/components/charts/BarChart";
 
-// --- OPERATIONAL TELEMETRY INTELLIGENCE TYPES ---
-type KpiMetrics = {
-  perfScore: number;
-  weeklyGrowth: number;
-  avgDailyScore: number;
-  focusRate: number;
-  successRate: number;
-  totalHours: number;
-};
-
-type TargetEfficiency = {
-  id: string;
+type TargetRow = {
+  targetId: string;
   name: string;
-  hours: number;
-  findings: number;
-  rewards: number;
-  roiPerHour: number;
+  huntingHours: number;
+  reportsSubmitted: number;
+  validReports: number;
+  hoursPerValidReport: number | null;
 };
 
-type HabitCorrelation = {
-  habit: string;
-  impactMetric: string;
-  correlationCoefficient: number;
-  confidence: "High" | "Medium" | "Low";
-  recommendation: string;
+type TopicRow = {
+  topicId: string;
+  name: string;
+  totalHours: number;
+  sessionsCount: number;
+  lastStudiedAt: string | null;
 };
 
-type ForecastMatrix = {
-  estimatedRewards: number;
-  findingProbability: number;
-  burnoutRisk: "Low" | "Moderate" | "Elevated";
+type HabitPoint = {
+  date: string;
+  reading: number;
+  workout: number;
+  sleepHours: number;
+  bedTimeMinutes: number;
+  wakeTimeMinutes: number;
+  consistency: number;
+  completionPercent: number;
 };
 
-type AnalyticsTelemetryPayload = {
-  kpis: KpiMetrics;
-  historicalTrend: { label: string; value: number }[];
-  distributionTrend: { label: string; value: number }[];
-  targetsRoi: TargetEfficiency[];
-  correlations: HabitCorrelation[];
-  forecast: ForecastMatrix;
+type AnalyticsData = {
+  overview: {
+    totalHuntingHours: number;
+    totalLearningHours: number;
+    totalSessions: number;
+    totalTargets: number;
+    totalLearningTopics: number;
+    reportsSubmitted: number;
+    validReports: number;
+    overallConsistency: number;
+  };
+  timeAllocation: {
+    daily: { date: string; hunting: number; learning: number }[];
+    weekly: { date: string; hunting: number; learning: number }[];
+    monthly: { date: string; hunting: number; learning: number }[];
+    yearly: { date: string; hunting: number; learning: number }[];
+  };
+  targetInvestment: TargetRow[];
+  learningInvestment: {
+    all: TopicRow[];
+    mostStudied: TopicRow[];
+    leastStudied: TopicRow[];
+    recentlyLearned: TopicRow[];
+  };
+  habitAnalytics: HabitPoint[];
 };
 
-export default function AnalyticsIntelligencePage() {
-  // --- TELEMETRY STATE PIPELINE (No placeholders, starts clean) ---
-  const [data, setData] = React.useState<AnalyticsTelemetryPayload | null>(null);
-  const [timeRange, setTimeRange] = React.useState<"30d" | "90d" | "all">("30d");
+export default function AnalyticsPage() {
+  const [data, setData] = React.useState<AnalyticsData | null>(null);
   const [loading, setLoading] = React.useState(true);
+  
+  // Section B state: daily / weekly / monthly / yearly
+  const [allocationRange, setAllocationRange] = React.useState<"daily" | "weekly" | "monthly" | "yearly">("daily");
+  
+  // Section C state: sorting targets
+  const [targetSortField, setTargetSortField] = React.useState<keyof TargetRow>("huntingHours");
+  const [targetSortOrder, setTargetSortOrder] = React.useState<"asc" | "desc">("desc");
+
+  // Section E state: active habit filter for chart
+  const [activeHabit, setActiveHabit] = React.useState<"sleepHours" | "consistency" | "completionPercent" | "bedTimeMinutes" | "wakeTimeMinutes">("consistency");
+
+  const syncData = async () => {
+    try {
+      const res = await fetch("/api/analytics");
+      if (res.ok) {
+        const json = await res.json();
+        setData(json);
+      }
+    } catch (err) {
+      console.error("Failed syncing analytics diagnostics:", err);
+    } finally {
+      setLoading(false);
+    }
+  };
 
   React.useEffect(() => {
-    async function synchronizeAnalyticsIntelligence() {
-      try {
-        const res = await fetch(`/api/analytics?range=${timeRange}`);
-        if (res.ok) {
-          const json = await res.json();
-          setData(json);
-        }
-      } catch (err) {
-        console.error("Performance intelligence stream synchronization error:", err);
-      } finally {
-        setLoading(false);
-      }
-    }
-    synchronizeAnalyticsIntelligence();
-  }, [timeRange]);
+    syncData();
+  }, []);
 
   if (loading) {
     return (
       <div className="flex items-center justify-center min-h-[400px] font-mono text-xs text-zinc-500 uppercase tracking-widest animate-pulse">
-        // INDEXING_PERFORMANCE_INTELLIGENCE_FABRICS...
+        // INDEXING_PERFORMANCE_ANALYTICS_telemetry...
       </div>
     );
   }
 
-  // Safe destructuring fallbacks to fully isolate the UI from unexpected missing property crashes
-  const kpis = data?.kpis || { perfScore: 0, weeklyGrowth: 0, avgDailyScore: 0, focusRate: 0, successRate: 0, totalHours: 0 };
-  const historicalTrend = data?.historicalTrend || [];
-  const distributionTrend = data?.distributionTrend || [];
-  const targetsRoi = data?.targetsRoi || [];
-  const correlations = data?.correlations || [];
-  const forecast = data?.forecast || { estimatedRewards: 0, findingProbability: 0, burnoutRisk: "Low" };
-
-  // Guard check mapping directly to empty state parameters if zero metrics are parsed
-  if (!data || historicalTrend.length === 0) {
+  if (!data) {
     return (
       <div className="max-w-4xl mx-auto px-4 py-12">
         <EmptyState 
-          title="Performance Intelligence Telemetry Offline" 
-          description="Your audit log matrix lacks deep diagnostic indexes. Log active hunting operations to compute tactical productivity indicators."
+          title="Performance Telemetry Offline" 
+          description="Failed to compile intelligence matrices. Please ensure databases are initialized and active."
         />
       </div>
     );
   }
 
-  const getRiskBadgeVariant = (risk: string) => {
-    if (risk === "Elevated") return "danger";
-    if (risk === "Moderate") return "warning";
-    return "success";
+  const { overview, timeAllocation, targetInvestment, learningInvestment, habitAnalytics } = data;
+
+  // Sorting logic for targets
+  const sortedTargets = [...targetInvestment].sort((a, b) => {
+    const aVal = a[targetSortField];
+    const bVal = b[targetSortField];
+    if (aVal === null) return 1;
+    if (bVal === null) return -1;
+    if (aVal < bVal) return targetSortOrder === "asc" ? -1 : 1;
+    if (aVal > bVal) return targetSortOrder === "asc" ? 1 : -1;
+    return 0;
+  });
+
+  const toggleTargetSort = (field: keyof TargetRow) => {
+    if (targetSortField === field) {
+      setTargetSortOrder(targetSortOrder === "asc" ? "desc" : "asc");
+    } else {
+      setTargetSortField(field);
+      setTargetSortOrder("desc");
+    }
   };
 
+  // Helper to format minutes as HH:MM
+  const formatMinutesToTime = (mins: number) => {
+    if (!mins) return "00:00";
+    const h = Math.floor(mins / 60);
+    const m = Math.round(mins % 60);
+    return `${String(h).padStart(2, "0")}:${String(m).padStart(2, "0")}`;
+  };
+
+  // Sections data prep for charts
+  const allocationPoints = timeAllocation[allocationRange] || [];
+  const huntingChartData = allocationPoints.map(p => ({ label: p.date, value: Math.round(p.hunting * 10) / 10 }));
+  const learningChartData = allocationPoints.map(p => ({ label: p.date, value: Math.round(p.learning * 10) / 10 }));
+
+  // Habit analytics chart mapping
+  const habitChartData = habitAnalytics.map(h => {
+    let val = h[activeHabit];
+    if (activeHabit === "bedTimeMinutes" || activeHabit === "wakeTimeMinutes") {
+      // Map minutes from midnight directly
+      val = Math.round((val / 60) * 10) / 10; // represent in fractional hours
+    }
+    return {
+      label: h.date.slice(5), // MM-DD
+      value: val,
+    };
+  });
+
   return (
-    <div className="max-w-7xl mx-auto px-4 py-6 space-y-6 text-zinc-200">
+    <div className="max-w-7xl mx-auto px-4 py-6 space-y-8 text-zinc-200">
       
-      {/* HEADER CONTROLS NAVIGATION STRIP */}
+      {/* 1. PAGE HEADER */}
       <div className="flex flex-col md:flex-row md:items-center justify-between gap-4 border-b border-border-subtle pb-5">
         <div>
           <h1 className="text-sm font-semibold tracking-tight text-white uppercase font-mono flex items-center gap-2">
-            <Activity className="w-4 h-4 text-accent-cyan" /> Workspace Performance Intelligence Terminal
+            <Activity className="w-4 h-4 text-accent-cyan animate-pulse" /> Security Yield & Time Analytics
           </h1>
-          <p className="text-[11px] text-zinc-500 mt-0.5">Automated yield modeling, habit optimizations, and target return matrices.</p>
-        </div>
-
-        <div className="flex items-center bg-black border border-border-subtle p-1 rounded-md self-start md:self-auto font-mono text-[10px]">
-          {(["30d", "90d", "all"] as const).map((range) => (
-            <button
-              key={range}
-              onClick={() => setTimeRange(range)}
-              className={`px-3 py-1 uppercase font-medium rounded transition-all ${timeRange === range ? "bg-white text-black font-bold" : "text-zinc-500 hover:text-zinc-300"}`}
-            >
-              TRAILING {range}
-            </button>
-          ))}
+          <p className="text-[11px] text-zinc-500 mt-0.5 font-mono">// WHAT HAPPENED? - Comprehensive visual diagnostic records.</p>
         </div>
       </div>
 
-      {/* 1. EXECUTIVE HERO MODEL & OVERVIEW KPIs */}
-      <div className="grid grid-cols-2 lg:grid-cols-6 gap-4 font-mono">
-        <div className="border border-border-subtle bg-card rounded-lg p-4 col-span-2 flex flex-col justify-between">
-          <div>
-            <span className="block text-[9px] text-zinc-500 uppercase">Operational Performance Score</span>
-            <span className="block text-3xl font-bold text-white tracking-tight mt-1">{kpis.perfScore} <span className="text-xs font-normal text-zinc-500">/ 100</span></span>
-          </div>
-          <p className="text-[11px] text-zinc-400 font-sans mt-2 leading-relaxed">
-            Your telemetry score is <span className="text-success-emerald font-mono font-bold">▲ {kpis.weeklyGrowth}% higher</span> than the preceding baseline velocity threshold.
-          </p>
+      {/* 2. SECTION A: Overview KPIs */}
+      <div className="grid grid-cols-2 md:grid-cols-4 lg:grid-cols-8 gap-4 font-mono text-xs">
+        <div className="border border-border-subtle bg-black p-3.5 rounded-lg">
+          <span className="block text-[8px] text-zinc-500 uppercase">Hunting Hours</span>
+          <span className="block text-md font-bold text-accent-cyan mt-1">{overview.totalHuntingHours.toFixed(1)}h</span>
         </div>
-        
-        <div className="border border-border-subtle bg-black rounded-lg p-3.5">
-          <span className="block text-[9px] text-zinc-500 uppercase">Avg Daily Score</span>
-          <span className="block text-lg font-bold text-white mt-1">{kpis.avgDailyScore.toFixed(1)}</span>
+        <div className="border border-border-subtle bg-black p-3.5 rounded-lg">
+          <span className="block text-[8px] text-zinc-500 uppercase">Learning Hours</span>
+          <span className="block text-md font-bold text-success-emerald mt-1">{overview.totalLearningHours.toFixed(1)}h</span>
         </div>
-        <div className="border border-border-subtle bg-black rounded-lg p-3.5">
-          <span className="block text-[9px] text-zinc-500 uppercase">Focus Allocation</span>
-          <span className="block text-lg font-bold text-accent-cyan mt-1">{kpis.focusRate}%</span>
+        <div className="border border-border-subtle bg-black p-3.5 rounded-lg">
+          <span className="block text-[8px] text-zinc-500 uppercase">Total Sessions</span>
+          <span className="block text-md font-bold text-white mt-1">{overview.totalSessions}</span>
         </div>
-        <div className="border border-border-subtle bg-black rounded-lg p-3.5">
-          <span className="block text-[9px] text-zinc-500 uppercase">Signal Accept</span>
-          <span className="block text-lg font-bold text-success-emerald mt-1">{kpis.successRate}%</span>
+        <div className="border border-border-subtle bg-black p-3.5 rounded-lg">
+          <span className="block text-[8px] text-zinc-500 uppercase">Targets Tracked</span>
+          <span className="block text-md font-bold text-white mt-1">{overview.totalTargets}</span>
         </div>
-        <div className="border border-border-subtle bg-black rounded-lg p-3.5">
-          <span className="block text-[9px] text-zinc-500 uppercase">Hours Tracked</span>
-          <span className="block text-lg font-bold text-white mt-1">{kpis.totalHours.toFixed(1)}h</span>
+        <div className="border border-border-subtle bg-black p-3.5 rounded-lg">
+          <span className="block text-[8px] text-zinc-500 uppercase">Study Topics</span>
+          <span className="block text-md font-bold text-white mt-1">{overview.totalLearningTopics}</span>
+        </div>
+        <div className="border border-border-subtle bg-black p-3.5 rounded-lg">
+          <span className="block text-[8px] text-zinc-500 uppercase">Reports Submitted</span>
+          <span className="block text-md font-bold text-warning-amber mt-1">{overview.reportsSubmitted}</span>
+        </div>
+        <div className="border border-border-subtle bg-black p-3.5 rounded-lg">
+          <span className="block text-[8px] text-zinc-500 uppercase">Valid Reports</span>
+          <span className="block text-md font-bold text-success-emerald mt-1">{overview.validReports}</span>
+        </div>
+        <div className="border border-border-subtle bg-black p-3.5 rounded-lg">
+          <span className="block text-[8px] text-zinc-500 uppercase">Consistency</span>
+          <span className="block text-md font-bold text-white mt-1">{overview.overallConsistency}%</span>
         </div>
       </div>
 
-      {/* 2. MAIN GRAPH LAYOUT DUPLEX */}
-      <div className="grid grid-cols-1 lg:grid-cols-2 gap-4">
-        <Panel>
-          <div className="mb-4">
-            <h3 className="text-xs font-mono font-bold uppercase tracking-wider text-zinc-400 flex items-center gap-1.5">
-              <TrendingUp size={13} className="text-accent-cyan" /> Daily Score Velocity
-            </h3>
-          </div>
-          <LineChart data={historicalTrend} height={160} />
-        </Panel>
-
-        <Panel>
-          <div className="mb-4">
-            <h3 className="text-xs font-mono font-bold uppercase tracking-wider text-zinc-400 flex items-center gap-1.5">
-              <BarChart3 size={13} className="text-accent-cyan" /> Vulnerability Action Distribution
-            </h3>
-          </div>
-          <BarChart data={distributionTrend} height={160} />
-        </Panel>
-      </div>
-
-      {/* 3. TARGET COMPREHENSIVE ROI TABLE MATRIX */}
+      {/* 3. SECTION B: Time Allocation (Hunting vs Learning) */}
       <Panel>
-        <div className="mb-3">
+        <div className="flex flex-col sm:flex-row sm:items-center justify-between gap-3 border-b border-border-subtle pb-4 mb-4">
           <h3 className="text-xs font-mono font-bold uppercase tracking-wider text-zinc-400 flex items-center gap-1.5">
-            <Target size={13} /> Target Vector Return On Investment (ROI)
+            <Clock size={13} className="text-accent-cyan" /> Time Allocation & Burn Velocity
           </h3>
+          <div className="flex bg-black border border-border-subtle p-0.5 rounded font-mono text-[9px]">
+            {(["daily", "weekly", "monthly", "yearly"] as const).map(range => (
+              <button
+                key={range}
+                onClick={() => setAllocationRange(range)}
+                className={`px-2 py-1 uppercase font-bold transition-all rounded-sm cursor-pointer ${allocationRange === range ? "bg-zinc-800 text-white" : "text-zinc-500 hover:text-zinc-300"}`}
+              >
+                {range}
+              </button>
+            ))}
+          </div>
         </div>
-        <div className="border border-border-subtle rounded-md overflow-hidden bg-black font-mono text-xs">
-          <table className="w-full text-left">
-            <thead className="bg-zinc-950 border-b border-border-subtle text-zinc-500 text-[9px] uppercase">
-              <tr>
-                <th className="p-3">Target Profile Name</th>
-                <th className="p-3">Invested Clock</th>
-                <th className="p-3">Identified Bugs</th>
-                <th className="p-3">Gross Yield</th>
-                <th className="p-3 text-right">Yield Efficiency Ratio</th>
-              </tr>
-            </thead>
-            <tbody className="divide-y divide-border-subtle/50 text-zinc-300">
-              {targetsRoi.map((t) => (
-                <tr key={t.id} className="hover:bg-zinc-900/30">
-                  <td className="p-3 text-white font-semibold font-sans">{t.name}</td>
-                  <td className="p-3 text-zinc-400">{t.hours.toFixed(1)}h</td>
-                  <td className="p-3 text-zinc-400">{t.findings}</td>
-                  <td className="p-3 text-success-emerald">${t.rewards.toLocaleString()}</td>
-                  <td className="p-3 text-right font-bold text-white">${t.roiPerHour.toFixed(2)}/hr</td>
-                </tr>
-              ))}
-            </tbody>
-          </table>
+
+        <div className="grid grid-cols-1 lg:grid-cols-2 gap-6">
+          <div className="space-y-2">
+            <div className="flex items-center justify-between text-[10px] font-mono text-zinc-400">
+              <span className="uppercase font-bold text-accent-cyan flex items-center gap-1">
+                <span className="h-1.5 w-1.5 rounded-full bg-accent-cyan" /> Hunting Hours Trend
+              </span>
+              <span>Avg: {(overview.totalHuntingHours / (allocationRange === "daily" ? 30 : 12)).toFixed(1)}h / interval</span>
+            </div>
+            {huntingChartData.length > 1 ? (
+              <LineChart data={huntingChartData} height={160} />
+            ) : (
+              <div className="h-40 border border-border-subtle/50 bg-black rounded-lg flex items-center justify-center font-mono text-[10px] text-zinc-600">// INSUFFICIENT_TIMELINE_SERIES</div>
+            )}
+          </div>
+          <div className="space-y-2">
+            <div className="flex items-center justify-between text-[10px] font-mono text-zinc-400">
+              <span className="uppercase font-bold text-success-emerald flex items-center gap-1">
+                <span className="h-1.5 w-1.5 rounded-full bg-success-emerald" /> Learning Hours Trend
+              </span>
+              <span>Avg: {(overview.totalLearningHours / (allocationRange === "daily" ? 30 : 12)).toFixed(1)}h / interval</span>
+            </div>
+            {learningChartData.length > 1 ? (
+              <LineChart data={learningChartData} height={160} />
+            ) : (
+              <div className="h-40 border border-border-subtle/50 bg-black rounded-lg flex items-center justify-center font-mono text-[10px] text-zinc-600">// INSUFFICIENT_TIMELINE_SERIES</div>
+            )}
+          </div>
         </div>
       </Panel>
 
-      <div className="grid grid-cols-1 lg:grid-cols-3 gap-6 items-start">
-        
-        {/* 4. CROSS-TAB HABIT CORRELATIONS DIAGNOSTIC */}
-        <div className="lg:col-span-2 space-y-4">
-          <Panel>
-            <div className="mb-4 border-b border-border-subtle pb-2">
-              <h3 className="text-xs font-mono font-bold uppercase tracking-wider text-zinc-400 flex items-center gap-1.5">
-                <Lightbulb size={13} className="text-warning-amber" /> Cross-Reference Habit Correlations
-              </h3>
-            </div>
-            
-            <div className="space-y-3">
-              {correlations.map((c, idx) => (
-                <div key={idx} className="border border-border-subtle bg-black p-4 rounded-md flex flex-col sm:flex-row justify-between sm:items-center gap-3 font-mono text-xs">
-                  <div className="space-y-1">
-                    <div className="flex items-center gap-2 flex-wrap">
-                      <span className="text-white font-bold uppercase">{c.habit}</span>
-                      <span className="text-zinc-600">➔</span>
-                      <span className="text-zinc-400">{c.impactMetric} Impact</span>
+      {/* 4. SECTION C: Target Investment Ranking */}
+      <Panel>
+        <div className="border-b border-border-subtle pb-4 mb-4">
+          <h3 className="text-xs font-mono font-bold uppercase tracking-wider text-zinc-400 flex items-center gap-1.5">
+            <Target size={13} className="text-accent-cyan" /> Target Investment Performance Matrix
+          </h3>
+          <p className="text-[10px] text-zinc-500 font-mono mt-0.5">Yield metrics aggregated by target container. Click headers to sort.</p>
+        </div>
+
+        {targetInvestment.length === 0 ? (
+          <EmptyState title="No Active Targets" description="Create targets and log sessions to compute investment indexes." />
+        ) : (
+          <div className="border border-border-subtle rounded-lg overflow-hidden bg-black font-mono text-[11px] overflow-x-auto">
+            <table className="w-full text-left min-w-[600px]">
+              <thead className="bg-zinc-950 border-b border-border-subtle text-zinc-500 text-[9px] uppercase">
+                <tr>
+                  <th className="py-3 px-4 text-zinc-400 font-bold">Target</th>
+                  <th className="py-3 px-4 text-right cursor-pointer hover:bg-zinc-900" onClick={() => toggleTargetSort("huntingHours")}>
+                    <div className="flex items-center justify-end gap-1">
+                      Hunting Hours {targetSortField === "huntingHours" && (targetSortOrder === "asc" ? <ChevronUp size={10} /> : <ChevronDown size={10} />)}
                     </div>
-                    <p className="font-sans text-[11px] text-zinc-400 leading-relaxed max-w-xl">{c.recommendation}</p>
-                  </div>
-                  
-                  <div className="text-right shrink-0 self-end sm:self-auto flex sm:flex-col items-center sm:items-end gap-2 sm:gap-1">
-                    <span className="text-[10px] text-zinc-600 block">CONFIDENCE</span>
-                    <Badge variant={c.confidence === "High" ? "success" : "neutral"}>{c.confidence.toUpperCase()}</Badge>
-                  </div>
+                  </th>
+                  <th className="py-3 px-4 text-right cursor-pointer hover:bg-zinc-900" onClick={() => toggleTargetSort("reportsSubmitted")}>
+                    <div className="flex items-center justify-end gap-1">
+                      Reports {targetSortField === "reportsSubmitted" && (targetSortOrder === "asc" ? <ChevronUp size={10} /> : <ChevronDown size={10} />)}
+                    </div>
+                  </th>
+                  <th className="py-3 px-4 text-right cursor-pointer hover:bg-zinc-900" onClick={() => toggleTargetSort("validReports")}>
+                    <div className="flex items-center justify-end gap-1">
+                      Valid Reports {targetSortField === "validReports" && (targetSortOrder === "asc" ? <ChevronUp size={10} /> : <ChevronDown size={10} />)}
+                    </div>
+                  </th>
+                  <th className="py-3 px-4 text-right cursor-pointer hover:bg-zinc-900" onClick={() => toggleTargetSort("hoursPerValidReport")}>
+                    <div className="flex items-center justify-end gap-1">
+                      Hours / Valid Report {targetSortField === "hoursPerValidReport" && (targetSortOrder === "asc" ? <ChevronUp size={10} /> : <ChevronDown size={10} />)}
+                    </div>
+                  </th>
+                </tr>
+              </thead>
+              <tbody className="divide-y divide-border-subtle/50 text-zinc-300">
+                {sortedTargets.map((row) => (
+                  <tr key={row.targetId} className="hover:bg-zinc-950/60 transition-colors">
+                    <td className="py-3 px-4 font-bold uppercase text-white">{row.name}</td>
+                    <td className="py-3 px-4 text-right">{row.huntingHours.toFixed(1)}h</td>
+                    <td className="py-3 px-4 text-right text-warning-amber">{row.reportsSubmitted}</td>
+                    <td className="py-3 px-4 text-right text-success-emerald font-bold">{row.validReports}</td>
+                    <td className="py-3 px-4 text-right text-accent-cyan font-bold">
+                      {row.hoursPerValidReport !== null ? `${row.hoursPerValidReport.toFixed(1)}h` : "—"}
+                    </td>
+                  </tr>
+                ))}
+              </tbody>
+            </table>
+          </div>
+        )}
+      </Panel>
+
+      {/* 5. SECTION D: Learning Investment ranking */}
+      <div className="grid grid-cols-1 lg:grid-cols-3 gap-6">
+        {/* Most Studied */}
+        <Panel>
+          <div className="border-b border-border-subtle pb-3 mb-3">
+            <h4 className="text-xs font-mono font-bold uppercase tracking-wider text-zinc-400 flex items-center gap-1.5">
+              <Award size={13} className="text-success-emerald" /> Most Studied Topics
+            </h4>
+          </div>
+          {learningInvestment.mostStudied.length === 0 ? (
+            <p className="text-[10px] font-mono text-zinc-600 leading-relaxed">// NO_TOPICS_STUDIED_YET</p>
+          ) : (
+            <div className="space-y-2.5 font-mono text-[11px]">
+              {learningInvestment.mostStudied.slice(0, 5).map((tp, idx) => (
+                <div key={tp.topicId} className="flex justify-between items-center bg-black/40 border border-border-subtle/40 p-2.5 rounded hover:border-success-emerald/20 transition-all">
+                  <span className="truncate uppercase max-w-[160px] text-zinc-200 font-bold">{idx + 1}. {tp.name}</span>
+                  <span className="text-success-emerald font-bold">{tp.totalHours.toFixed(1)}h <span className="text-zinc-600 font-normal">({tp.sessionsCount} sessions)</span></span>
                 </div>
               ))}
             </div>
-          </Panel>
-        </div>
+          )}
+        </Panel>
 
-        {/* 5. predictive MODELING & FORECAST ENGINE */}
-        <div className="lg:col-span-1 space-y-4">
-          <Panel>
-            <div className="mb-3 border-b border-border-subtle pb-2">
-              <h3 className="text-xs font-mono font-bold uppercase tracking-wider text-zinc-400 flex items-center gap-1.5">
-                <Zap size={13} className="text-accent-cyan" /> Predictive Yield Modeling & Forecasts
-              </h3>
+        {/* Least Studied */}
+        <Panel>
+          <div className="border-b border-border-subtle pb-3 mb-3">
+            <h4 className="text-xs font-mono font-bold uppercase tracking-wider text-zinc-400 flex items-center gap-1.5">
+              <BookOpen size={13} className="text-warning-amber" /> Least Studied Topics
+            </h4>
+          </div>
+          {learningInvestment.leastStudied.length === 0 ? (
+            <p className="text-[10px] font-mono text-zinc-600 leading-relaxed">// NO_TOPICS_STUDIED_YET</p>
+          ) : (
+            <div className="space-y-2.5 font-mono text-[11px]">
+              {learningInvestment.leastStudied.slice(0, 5).map((tp, idx) => (
+                <div key={tp.topicId} className="flex justify-between items-center bg-black/40 border border-border-subtle/40 p-2.5 rounded hover:border-warning-amber/20 transition-all">
+                  <span className="truncate uppercase max-w-[160px] text-zinc-200 font-bold">{idx + 1}. {tp.name}</span>
+                  <span className="text-zinc-400">{tp.totalHours.toFixed(1)}h <span className="text-zinc-600 font-normal">({tp.sessionsCount} sessions)</span></span>
+                </div>
+              ))}
             </div>
+          )}
+        </Panel>
 
-            <div className="space-y-4 font-mono text-xs pt-1">
-              <div>
-                <span className="block text-[9px] text-zinc-600 uppercase">Estimated Month Rewards Yield</span>
-                <span className="text-sm font-bold text-success-emerald mt-0.5 block">${forecast.estimatedRewards.toLocaleString()}</span>
-              </div>
-              
-              <div>
-                <span className="block text-[9px] text-zinc-600 uppercase">Vulnerability Discovery Probability</span>
-                <span className="text-sm font-bold text-white mt-0.5 block">{(forecast.findingProbability * 100).toFixed(0)}%</span>
-              </div>
-
-              <div className="border-t border-border-subtle/50 pt-3">
-                <span className="block text-[9px] text-zinc-600 uppercase mb-1">Burnout System Risk Threshold</span>
-                <Badge variant={getRiskBadgeVariant(forecast.burnoutRisk)}>{forecast.burnoutRisk.toUpperCase()}</Badge>
-              </div>
+        {/* Recently Studied */}
+        <Panel>
+          <div className="border-b border-border-subtle pb-3 mb-3">
+            <h4 className="text-xs font-mono font-bold uppercase tracking-wider text-zinc-400 flex items-center gap-1.5">
+              <Calendar size={13} className="text-accent-cyan" /> Recently Learned Topics
+            </h4>
+          </div>
+          {learningInvestment.recentlyLearned.length === 0 ? (
+            <p className="text-[10px] font-mono text-zinc-600 leading-relaxed">// NO_TOPICS_STUDIED_YET</p>
+          ) : (
+            <div className="space-y-2.5 font-mono text-[11px]">
+              {learningInvestment.recentlyLearned.slice(0, 5).map((tp, idx) => (
+                <div key={tp.topicId} className="flex justify-between items-center bg-black/40 border border-border-subtle/40 p-2.5 rounded hover:border-accent-cyan/20 transition-all">
+                  <span className="truncate uppercase max-w-[160px] text-zinc-200 font-bold">{tp.name}</span>
+                  <span className="text-zinc-400 text-[10px]">
+                    {tp.lastStudiedAt ? new Date(tp.lastStudiedAt).toLocaleDateString([], { dateStyle: "short" }) : "Never"}
+                  </span>
+                </div>
+              ))}
             </div>
-          </Panel>
-        </div>
-
+          )}
+        </Panel>
       </div>
+
+      {/* 6. SECTION E: Habit Analytics */}
+      <Panel>
+        <div className="flex flex-col sm:flex-row sm:items-center justify-between gap-3 border-b border-border-subtle pb-4 mb-4">
+          <div>
+            <h3 className="text-xs font-mono font-bold uppercase tracking-wider text-zinc-400 flex items-center gap-1.5">
+              <CheckCircle2 size={13} className="text-success-emerald" /> Core Habit Analytics & Compliance Trend
+            </h3>
+            <p className="text-[10px] text-zinc-500 font-mono mt-0.5">30-day timeline plotting selected habit metrics.</p>
+          </div>
+          <div className="flex flex-wrap bg-black border border-border-subtle p-0.5 rounded font-mono text-[9px] gap-0.5">
+            {[
+              { id: "consistency", label: "Consistency" },
+              { id: "completionPercent", label: "Completion %" },
+              { id: "sleepHours", label: "Sleep" },
+              { id: "bedTimeMinutes", label: "Bed Time" },
+              { id: "wakeTimeMinutes", label: "Wake Time" }
+            ].map(habit => (
+              <button
+                key={habit.id}
+                onClick={() => setActiveHabit(habit.id as any)}
+                className={`px-2 py-1 uppercase font-bold transition-all rounded-sm cursor-pointer ${activeHabit === habit.id ? "bg-zinc-800 text-white" : "text-zinc-500 hover:text-zinc-300"}`}
+              >
+                {habit.label}
+              </button>
+            ))}
+          </div>
+        </div>
+
+        <div className="space-y-4">
+          {habitChartData.length > 1 ? (
+            <LineChart data={habitChartData} height={180} />
+          ) : (
+            <div className="h-44 border border-border-subtle/50 bg-black rounded-lg flex items-center justify-center font-mono text-[10px] text-zinc-600">// INDEXING_DAILY_HABIT_SERIES</div>
+          )}
+          
+          <div className="grid grid-cols-2 md:grid-cols-4 gap-4 text-center font-mono text-[11px] pt-2 border-t border-border-subtle/50">
+            <div>
+              <span className="text-zinc-500 block text-[9px] uppercase">Mean Sleep Hours</span>
+              <span className="text-white font-bold text-xs mt-1 block">
+                {(habitAnalytics.reduce((acc, h) => acc + h.sleepHours, 0) / habitAnalytics.length).toFixed(1)}h
+              </span>
+            </div>
+            <div>
+              <span className="text-zinc-500 block text-[9px] uppercase">Mean Bed Time</span>
+              <span className="text-white font-bold text-xs mt-1 block">
+                {formatMinutesToTime(habitAnalytics.reduce((acc, h) => acc + h.bedTimeMinutes, 0) / habitAnalytics.length)}
+              </span>
+            </div>
+            <div>
+              <span className="text-zinc-500 block text-[9px] uppercase">Mean Wake Time</span>
+              <span className="text-white font-bold text-xs mt-1 block">
+                {formatMinutesToTime(habitAnalytics.reduce((acc, h) => acc + h.wakeTimeMinutes, 0) / habitAnalytics.length)}
+              </span>
+            </div>
+            <div>
+              <span className="text-zinc-500 block text-[9px] uppercase">Habit Completion</span>
+              <span className="text-success-emerald font-bold text-xs mt-1 block">
+                {Math.round(habitAnalytics.reduce((acc, h) => acc + h.completionPercent, 0) / habitAnalytics.length)}%
+              </span>
+            </div>
+          </div>
+        </div>
+      </Panel>
+
     </div>
   );
 }
