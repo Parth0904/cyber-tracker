@@ -14,23 +14,24 @@ export async function POST(
     }>;
   }
 ) {
+  try {
+    const { id } = await params;
+    const { type, description } = await req.json();
 
-  const { id } =
-    await params;
+    await startSession(
+      Number(id),
+      type,
+      description
+    );
 
-  const {
-    type,
-    description,
-  } = await req.json();
-
-  await startSession(
-    Number(id),
-    type,
-    description
-  );
-
-  return NextResponse.json({
-    success: true,
-  });
-
+    return NextResponse.json({
+      success: true,
+    });
+  } catch (err: any) {
+    console.error("Failed to start session:", err);
+    return NextResponse.json(
+      { error: err.message || "Failed to start session" },
+      { status: 400 }
+    );
+  }
 }

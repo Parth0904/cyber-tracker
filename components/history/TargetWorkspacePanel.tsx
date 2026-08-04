@@ -1,9 +1,8 @@
 "use client";
 
 import * as React from "react";
-import { X, ExternalLink, ShieldCheck, Terminal, Layers, AlertCircle, Calendar } from "lucide-react";
+import { X, ExternalLink, Terminal, Layers } from "lucide-react";
 import { Badge } from "@/components/ui/Badge";
-import { Button } from "@/components/ui/Button";
 
 type WorkspacePanelProps = {
   target: any;

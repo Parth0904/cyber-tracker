@@ -26,7 +26,8 @@ CREATE TABLE IF NOT EXISTS daily_entries (
   focus_feeling VARCHAR(50) CHECK (focus_feeling IN ('Distracted', 'Focused', 'Deep', 'Flow State')),
   workout INTEGER DEFAULT 0 CHECK (workout IN (0, 1)),
   steps INTEGER DEFAULT 0,
-  notes TEXT
+  notes TEXT,
+  mobile_screen_time INTEGER
 );
 
 CREATE TABLE IF NOT EXISTS activities (
@@ -60,7 +61,8 @@ CREATE TABLE IF NOT EXISTS target_sessions (
   description TEXT,
   started_at VARCHAR(50) NOT NULL,
   ended_at VARCHAR(50),
-  duration INTEGER DEFAULT 0
+  duration INTEGER DEFAULT 0,
+  last_active_at VARCHAR(50)
 );
 
 CREATE TABLE IF NOT EXISTS target_findings (
@@ -109,15 +111,6 @@ CREATE TABLE IF NOT EXISTS learning_sessions (
   last_active_at TIMESTAMP NOT NULL
 );
 
-CREATE TABLE IF NOT EXISTS health_connect_config (
-  id INTEGER PRIMARY KEY CHECK(id=1),
-  status VARCHAR(50) DEFAULT 'Not Connected',
-  simulated_workout INTEGER DEFAULT 0
-);
-
-INSERT INTO health_connect_config (id, status, simulated_workout)
-VALUES (1, 'Not Connected', 0)
-ON CONFLICT (id) DO NOTHING;
 
 CREATE TABLE IF NOT EXISTS weekly_reviews (
   id SERIAL PRIMARY KEY,
@@ -162,6 +155,9 @@ async function main() {
   console.log("Initializing PostgreSQL Database schema...");
   try {
     await pool.query(schema);
+    await pool.query("ALTER TABLE daily_entries ADD COLUMN IF NOT EXISTS mobile_screen_time INTEGER;");
+    await pool.query("ALTER TABLE target_sessions ADD COLUMN IF NOT EXISTS last_active_at VARCHAR(50);");
+    await pool.query("DROP TABLE IF EXISTS health_connect_config;");
     console.log("PostgreSQL Database schema initialized successfully.");
   } catch (err) {
     console.error("Failed to initialize PostgreSQL Database schema:", err);

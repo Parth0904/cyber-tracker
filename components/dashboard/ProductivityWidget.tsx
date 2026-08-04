@@ -17,14 +17,6 @@ type ProductivityProps = {
 };
 
 export default function ProductivityWidget({ score, level, reason, contributors }: ProductivityProps) {
-  // Map backend levels to clear functional colors safely
-  const getLevelColor = (lvl: string) => {
-    const l = lvl.toLowerCase();
-    if (l.includes("high") || l.includes("optimal") || l.includes("peak")) return "green";
-    if (l.includes("moderate") || l.includes("normal")) return "cyan";
-    return "yellow";
-  };
-
   return (
     <Panel title="Today's Productivity Index">
       <div className="space-y-6">

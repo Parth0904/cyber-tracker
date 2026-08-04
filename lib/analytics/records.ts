@@ -43,15 +43,5 @@ export function generatePersonalRecords(
       ),
     },
 
-    {
-      title: "Most Steps",
-      value: Math.max(
-        0,
-        ...dailyEntries.map(
-          d => d.steps
-        )
-      ),
-    },
-
   ];
 }

@@ -1,9 +1,7 @@
 "use client";
 
 import * as React from "react";
-import { X, ExternalLink, Terminal, History, StickyNote, Link } from "lucide-react";
-import { Badge } from "@/components/ui/Badge";
-import { Button } from "@/components/ui/Button";
+import { X, ExternalLink, Terminal, StickyNote, Link } from "lucide-react";
 
 type DrawerProps = {
   finding: any;

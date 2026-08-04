@@ -1,4 +1,4 @@
-import { one, many, execute } from "@/lib/database/query";
+import { one, many, execute, insertReturningId } from "@/lib/database/query";
 
 export async function getOrCreateTopic(name: string) {
   const existing = await one<any>(
@@ -7,9 +7,9 @@ export async function getOrCreateTopic(name: string) {
   );
   if (existing) return existing;
   
-  const result = await execute("INSERT INTO learning_topics (name) VALUES (?)", name);
+  const id = await insertReturningId("INSERT INTO learning_topics (name) VALUES (?)", name);
   return {
-    id: Number(result.lastInsertRowid),
+    id,
     name,
     created_at: new Date().toISOString()
   };
@@ -59,12 +59,19 @@ export async function createLearningSession(topicId: number) {
     await terminateLearningSession(active.id);
   }
 
+  // If there's an existing active target hunting session, terminate it as well
+  const activeHunting = await one<any>("SELECT id FROM target_sessions WHERE ended_at IS NULL LIMIT 1");
+  if (activeHunting) {
+    const { terminateSession } = await import("@/lib/repositories/targetSessions");
+    await terminateSession(activeHunting.id);
+  }
+
   const now = new Date().toISOString();
-  const result = await execute(`
+  const id = await insertReturningId(`
     INSERT INTO learning_sessions (topic_id, started_at, last_active_at)
     VALUES (?, ?, ?)
   `, topicId, now, now);
-  return Number(result.lastInsertRowid);
+  return id;
 }
 
 export async function touchLearningSession(id: number) {
@@ -130,12 +137,14 @@ export async function getActiveLearningSessionWithAbandonedStatus() {
 
   if (!active) return null;
 
-  await touchLearningSession(active.id);
-
   const lastActive = new Date(active.last_active_at).getTime();
   const now = Date.now();
   const diffMinutes = (now - lastActive) / 60000;
   const isAbandoned = diffMinutes > 15;
+
+  if (!isAbandoned) {
+    await touchLearningSession(active.id);
+  }
 
   return {
     id: active.id,

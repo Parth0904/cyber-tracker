@@ -1,3 +1,4 @@
+/* eslint-disable @typescript-eslint/no-unused-vars */
 import {
   PeriodReport,
   TimeRange,
@@ -9,7 +10,7 @@ import {
 
 export function generatePeriodReport(
   statistics: Statistics,
-  range: TimeRange
+  _range: TimeRange
 ): PeriodReport {
 
   return {

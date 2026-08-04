@@ -56,7 +56,9 @@ export default function HistoryCard({
 
           <p>😴 Sleep: {day.daily.sleep_hours}h</p>
 
-          <p>📚 Reading: {day.daily.reading}m</p>
+          <p>⏰ Sleep Window: {day.daily.bed_time || "--"} - {day.daily.wake_time || "--"}</p>
+
+          <p>📚 Reading: {day.daily.reading ? "Yes" : "No"}</p>
 
           <p>
             🏋 Workout:
@@ -66,7 +68,7 @@ export default function HistoryCard({
               : "No"}
           </p>
 
-          <p>👣 Steps: {day.daily.steps}</p>
+          <p>📱 Screen Time: {day.daily.mobile_screen_time !== undefined && day.daily.mobile_screen_time !== null ? `${Math.floor(day.daily.mobile_screen_time / 60)}h ${day.daily.mobile_screen_time % 60}m` : "Not Logged"}</p>
 
         </div>
 

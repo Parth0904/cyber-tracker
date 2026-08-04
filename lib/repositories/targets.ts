@@ -74,10 +74,34 @@ export async function updateTarget(
     `
       UPDATE targets
       SET
-        name = ?
+        name = ?,
+        platform = ?,
+        url = ?,
+        status = ?,
+        priority = ?,
+        started_at = ?,
+        last_activity = ?,
+        notes = ?,
+        category = ?,
+        scope_url = ?,
+        program_url = ?,
+        created_by = ?,
+        archived = ?
       WHERE id = ?
     `,
     target.name,
+    target.platform ?? "General",
+    target.url ?? null,
+    target.status ?? "Recon",
+    target.priority ?? "P2",
+    target.started_at ?? new Date().toISOString(),
+    target.last_activity ?? null,
+    target.notes ?? "",
+    target.category ?? null,
+    target.scope_url ?? null,
+    target.program_url ?? null,
+    target.created_by ?? null,
+    target.archived ?? 0,
     id
   );
 }

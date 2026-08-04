@@ -16,11 +16,14 @@ const geistMono = Geist_Mono({
   subsets: ["latin"],
 });
 
+export const viewport = {
+  themeColor: "#6366f1",
+};
+
 export const metadata: Metadata = {
   title: "Cyber Tracker",
   description: "Dynamic Command Center & Security Operations HUD",
   manifest: "/manifest.json",
-  themeColor: "#6366f1",
   other: {
     "apple-mobile-web-app-capable": "yes",
     "apple-mobile-web-app-status-bar-style": "black-translucent",

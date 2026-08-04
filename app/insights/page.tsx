@@ -2,8 +2,7 @@
 
 import * as React from "react";
 import { 
-  Brain, Moon, BookOpen, Zap, Clock, Sun, Award, AlertCircle, 
-  ChevronRight, Sparkles, HelpCircle, CheckCircle2, Shield
+  Brain, Moon, BookOpen, Zap, Clock, Sun, Award, AlertCircle
 } from "lucide-react";
 import { Panel } from "@/components/ui/Panel";
 import { Badge } from "@/components/ui/Badge";
@@ -65,6 +64,27 @@ type LearningData = {
   topics?: LearningTopicAttribution[];
 };
 
+type MobileScreenTimeData = {
+  status: InsightStatus;
+  confidence?: ConfidenceLevel;
+  lowScreen?: {
+    avgHunting: number;
+    avgLearning: number;
+    readingPct: number;
+    avgSleep: number;
+    avgConsistency: number;
+    avgReports: number;
+  };
+  highScreen?: {
+    avgHunting: number;
+    avgLearning: number;
+    readingPct: number;
+    avgSleep: number;
+    avgConsistency: number;
+    avgReports: number;
+  };
+};
+
 type InsightsPayload = {
   insights: {
     sleep: SleepData;
@@ -73,6 +93,7 @@ type InsightsPayload = {
     bedTime: BedTimeData;
     wakeTime: WakeTimeData;
     learning: LearningData;
+    mobileScreenTime: MobileScreenTimeData;
   };
 };
 
@@ -117,7 +138,7 @@ export default function InsightsPage() {
     );
   }
 
-  const { sleep, reading, workout, bedTime, wakeTime, learning } = data.insights;
+  const { sleep, reading, workout, bedTime, wakeTime, learning, mobileScreenTime } = data.insights;
 
   const renderConfidenceBadge = (confidence?: ConfidenceLevel) => {
     if (!confidence) return null;
@@ -357,6 +378,48 @@ export default function InsightsPage() {
                     ))}
                   </tbody>
                 </table>
+              </div>
+            </div>
+          )}
+        </Panel>
+
+        {/* 7. MOBILE SCREEN TIME CORRELATIONS */}
+        <Panel className="space-y-4 md:col-span-2">
+          <div className="flex items-center justify-between gap-2 border-b border-border-subtle pb-3">
+            <h3 className="text-xs font-mono font-bold text-white uppercase flex items-center gap-2">
+              <Zap className="w-4 h-4 text-accent-cyan" /> Mobile Screen Time Correlations
+            </h3>
+            {mobileScreenTime?.status === "success" && renderConfidenceBadge(mobileScreenTime.confidence)}
+          </div>
+
+          {mobileScreenTime?.status === "insufficient_data" ? (
+            renderInsufficientData()
+          ) : (
+            <div className="space-y-4 font-mono text-[11px]">
+              <div className="text-[10px] text-zinc-500 mb-2">// Correlating days with Screen Time under 2 hours (Low) versus 2+ hours (High)</div>
+              <div className="grid grid-cols-2 gap-4 border-b border-border-subtle/30 pb-4 text-center">
+                <div>
+                  <span className="text-accent-cyan font-bold uppercase block text-[9px]">Low Screen Time (&lt;2h)</span>
+                  <div className="mt-2 space-y-1.5 text-zinc-300">
+                    <div className="flex justify-between"><span>Hunting Hours:</span><span className="font-bold text-white">{mobileScreenTime.lowScreen?.avgHunting.toFixed(1)}h</span></div>
+                    <div className="flex justify-between"><span>Learning Hours:</span><span className="font-bold text-white">{mobileScreenTime.lowScreen?.avgLearning.toFixed(1)}h</span></div>
+                    <div className="flex justify-between"><span>Reading Rate:</span><span className="font-bold text-white">{mobileScreenTime.lowScreen?.readingPct}%</span></div>
+                    <div className="flex justify-between"><span>Sleep Hours:</span><span className="font-bold text-white">{mobileScreenTime.lowScreen?.avgSleep.toFixed(1)}h</span></div>
+                    <div className="flex justify-between"><span>Consistency:</span><span className="font-bold text-success-emerald">{mobileScreenTime.lowScreen?.avgConsistency}%</span></div>
+                    <div className="flex justify-between"><span>Reports / Day:</span><span className="font-bold text-white">{mobileScreenTime.lowScreen?.avgReports.toFixed(2)}</span></div>
+                  </div>
+                </div>
+                <div className="border-l border-border-subtle/30">
+                  <span className="text-zinc-500 font-bold uppercase block text-[9px]">High Screen Time (&gt;=2h)</span>
+                  <div className="mt-2 space-y-1.5 text-zinc-400">
+                    <div className="flex justify-between pl-4"><span>Hunting Hours:</span><span>{mobileScreenTime.highScreen?.avgHunting.toFixed(1)}h</span></div>
+                    <div className="flex justify-between pl-4"><span>Learning Hours:</span><span>{mobileScreenTime.highScreen?.avgLearning.toFixed(1)}h</span></div>
+                    <div className="flex justify-between pl-4"><span>Reading Rate:</span><span>{mobileScreenTime.highScreen?.readingPct}%</span></div>
+                    <div className="flex justify-between pl-4"><span>Sleep Hours:</span><span>{mobileScreenTime.highScreen?.avgSleep.toFixed(1)}h</span></div>
+                    <div className="flex justify-between pl-4"><span>Consistency:</span><span>{mobileScreenTime.highScreen?.avgConsistency}%</span></div>
+                    <div className="flex justify-between pl-4"><span>Reports / Day:</span><span>{mobileScreenTime.highScreen?.avgReports.toFixed(2)}</span></div>
+                  </div>
+                </div>
               </div>
             </div>
           )}

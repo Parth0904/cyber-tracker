@@ -73,6 +73,13 @@ NEXTAUTH_SECRET=a_secure_random_string_of_at_least_32_characters
 NEXTAUTH_URL=http://localhost:3000
 # Database defaults: If DATABASE_URL is left empty, SQLite is automatically selected.
 # DATABASE_URL=postgresql://user:password@localhost:5432/cyber_tracker
+
+# Parent Report SMTP Configuration (Required for automated Email Digests)
+SMTP_HOST=smtp.gmail.com
+SMTP_PORT=587
+SMTP_USER=your_smtp_username@gmail.com
+SMTP_PASS=your_smtp_app_password
+PARENT_EMAIL=recipient_parent_email@example.com
 ```
 
 ### Installation

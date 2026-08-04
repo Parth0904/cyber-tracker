@@ -68,9 +68,10 @@ export async function saveDailyEntry(
         focus_feeling,
         workout,
         steps,
-        notes
+        notes,
+        mobile_screen_time
       )
-      VALUES (?, ?, ?, ?, ?, ?, ?, ?, ?)
+      VALUES (?, ?, ?, ?, ?, ?, ?, ?, ?, ?)
       ON CONFLICT(date)
       DO UPDATE SET
         sleep_hours = excluded.sleep_hours,
@@ -80,7 +81,8 @@ export async function saveDailyEntry(
         focus_feeling = excluded.focus_feeling,
         workout = excluded.workout,
         steps = excluded.steps,
-        notes = excluded.notes
+        notes = excluded.notes,
+        mobile_screen_time = excluded.mobile_screen_time
     `,
     entry.date,
     entry.sleep_hours,
@@ -90,6 +92,7 @@ export async function saveDailyEntry(
     entry.focus_feeling,
     entry.workout ? 1 : 0,
     entry.steps,
-    entry.notes
+    entry.notes,
+    entry.mobile_screen_time
   );
 }

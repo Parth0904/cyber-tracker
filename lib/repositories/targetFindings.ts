@@ -2,6 +2,7 @@ import {
   one,
   many,
   execute,
+  insertReturningId,
 } from "@/lib/database";
 
 export type FindingStatus =
@@ -62,8 +63,8 @@ export async function getFinding(
 
 export async function createFinding(
   finding: Omit<TargetFinding, "id">
-) {
-  return await execute(
+): Promise<number> {
+  return await insertReturningId(
     `
       INSERT INTO target_findings (
         target_id,

@@ -1,7 +1,7 @@
+/* eslint-disable @typescript-eslint/no-unused-vars */
 import { Insight } from "./index";
 import {
   analyzeBuckets,
-  getStrength,
 } from "./analyzer";
 
 export function generateBedTimeInsight(
@@ -10,7 +10,7 @@ export function generateBedTimeInsight(
     bed_time: string;
   }[],
   scoreMap: Record<string, number>,
-  todayBedTime: string
+  _todayBedTime: string
 ): Insight {
 
   const values = entries.map((day) => {

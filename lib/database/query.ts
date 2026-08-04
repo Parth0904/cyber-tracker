@@ -1,10 +1,34 @@
 import pg from "pg";
-import sqliteDb from "./connection";
+
+// Parse TIMESTAMP (OID 1114) as UTC ISO string to prevent timezone offset shifts
+pg.types.setTypeParser(1114, (val) => {
+  if (!val) return val;
+  // If it doesn't have T and Z, convert space to T and append Z
+  if (!val.includes("T")) {
+    val = val.replace(" ", "T");
+  }
+  if (!val.includes("Z")) {
+    val = val + "Z";
+  }
+  return val;
+});
+
+import { getSqlite } from "./connection";
 import { env } from "@/lib/env";
+
+const isVercel = process.env.VERCEL === "1";
+const isProduction = process.env.NODE_ENV === "production";
+const usePostgres = !!env.databaseUrl || isVercel || isProduction;
 
 // connection pool for PostgreSQL
 let pgPool: pg.Pool | null = null;
-if (env.databaseUrl) {
+
+if (usePostgres) {
+  if (!env.databaseUrl) {
+    throw new Error(
+      "CRITICAL DATABASE ERROR: PostgreSQL is required in this environment (Vercel or production), but DATABASE_URL is not defined."
+    );
+  }
   pgPool = new pg.Pool({
     connectionString: env.databaseUrl,
     ssl: {
@@ -33,12 +57,11 @@ export async function one<T>(
     const result = await pgPool.query(translated, params);
     return result.rows[0] as T | undefined;
   } else {
-    // SQLite synchronous execution wrapper
-    return new Promise((resolve) => {
-      const stmt = sqliteDb.prepare(sql);
-      const row = stmt.get(...params);
-      resolve(row as T | undefined);
-    });
+    // SQLite execution wrapper
+    const sqliteDb = await getSqlite();
+    const stmt = sqliteDb.prepare(sql);
+    const row = stmt.get(...params);
+    return row as T | undefined;
   }
 }
 
@@ -51,12 +74,11 @@ export async function many<T>(
     const result = await pgPool.query(translated, params);
     return result.rows as T[];
   } else {
-    // SQLite synchronous execution wrapper
-    return new Promise((resolve) => {
-      const stmt = sqliteDb.prepare(sql);
-      const rows = stmt.all(...params);
-      resolve(rows as T[]);
-    });
+    // SQLite execution wrapper
+    const sqliteDb = await getSqlite();
+    const stmt = sqliteDb.prepare(sql);
+    const rows = stmt.all(...params);
+    return rows as T[];
   }
 }
 
@@ -66,36 +88,47 @@ export async function execute(
 ): Promise<ExecutionResult> {
   if (pgPool) {
     const translated = translateSql(sql);
+    const result = await pgPool.query(translated, params);
+    return {
+      lastInsertRowid: 0,
+      changes: result.rowCount || 0,
+    };
+  } else {
+    // SQLite execution wrapper
+    const sqliteDb = await getSqlite();
+    const stmt = sqliteDb.prepare(sql);
+    const result = stmt.run(...params);
+    return {
+      lastInsertRowid: Number(result.lastInsertRowid),
+      changes: result.changes,
+    };
+  }
+}
+
+export async function insertReturningId(
+  sql: string,
+  ...params: unknown[]
+): Promise<number> {
+  if (pgPool) {
+    const translated = translateSql(sql);
     let sqlToRun = translated;
 
-    // Append RETURNING id clause to INSERT queries to get the inserted row id
     const cleanSql = sql.trim().toUpperCase();
-    if (cleanSql.startsWith("INSERT") && !cleanSql.includes("RETURNING")) {
+    if (!cleanSql.includes("RETURNING")) {
       sqlToRun = `${translated} RETURNING id`;
     }
 
     const result = await pgPool.query(sqlToRun, params);
-    
-    // Attempt to parse returning id
     const firstRow = result.rows[0];
-    let insertedId = 0;
-    if (firstRow) {
-      insertedId = firstRow.id ? Number(firstRow.id) : 0;
+    if (firstRow && firstRow.id !== undefined && firstRow.id !== null) {
+      return Number(firstRow.id);
     }
-
-    return {
-      lastInsertRowid: insertedId,
-      changes: result.rowCount || 0,
-    };
+    return 0;
   } else {
-    // SQLite synchronous execution wrapper
-    return new Promise((resolve) => {
-      const stmt = sqliteDb.prepare(sql);
-      const result = stmt.run(...params);
-      resolve({
-        lastInsertRowid: Number(result.lastInsertRowid),
-        changes: result.changes,
-      });
-    });
+    // SQLite execution wrapper
+    const sqliteDb = await getSqlite();
+    const stmt = sqliteDb.prepare(sql);
+    const result = stmt.run(...params);
+    return Number(result.lastInsertRowid);
   }
 }

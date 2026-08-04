@@ -11,6 +11,10 @@ import {
 export default function TopNavbar() {
   const pathname = usePathname();
 
+  if (pathname === "/login") {
+    return null;
+  }
+
   // FIXED: Integrated the "/history" path into the core tracking array
   const navItems = [
     { href: "/", label: "Console", icon: <Terminal size={13} /> },

@@ -1,7 +1,7 @@
 "use client";
 
 import * as React from "react";
-import { Check, ShieldAlert, ShieldCheck } from "lucide-react";
+import { ShieldAlert, ShieldCheck } from "lucide-react";
 import { Button } from "@/components/ui/Button";
 
 type Props = {

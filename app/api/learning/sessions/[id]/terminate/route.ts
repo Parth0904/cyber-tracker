@@ -1,5 +1,5 @@
 import { NextResponse } from "next/server";
-import { terminateLearningSession } from "@/lib/repositories/learning";
+import { terminateLearningSession, getLearningSession } from "@/lib/repositories/learning";
 
 export async function PATCH(
   _: Request,
@@ -13,7 +13,14 @@ export async function PATCH(
 ) {
   try {
     const { id } = await params;
-    await terminateLearningSession(Number(id));
+    const sessionId = Number(id);
+
+    const existing = await getLearningSession(sessionId);
+    if (!existing) {
+      return NextResponse.json({ error: "Learning session not found" }, { status: 404 });
+    }
+
+    await terminateLearningSession(sessionId);
     return NextResponse.json({ success: true });
   } catch (err) {
     console.error("Failed to terminate learning session:", err);

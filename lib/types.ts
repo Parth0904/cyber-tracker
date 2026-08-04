@@ -13,8 +13,9 @@ export type DailyEntry = {
   bed_time: string;
   wake_time?: string;
   reading: number;
-  focus_feeling: string;
+  focus_feeling?: string | null;
   workout: number;
   steps: number;
   notes: string;
+  mobile_screen_time?: number | null;
 };

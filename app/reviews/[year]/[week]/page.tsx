@@ -2,40 +2,37 @@
 
 import * as React from "react";
 import Link from "next/link";
-import { useParams, useRouter } from "next/navigation";
+import { useParams } from "next/navigation";
 import { 
-  FileText, Calendar, ArrowLeft, RefreshCw, Download, Printer, 
-  Target, BookOpen, Layers, FileJson, FileCheck, CheckCircle2, 
-  TrendingUp, TrendingDown, ArrowUpRight, Award, Lightbulb, ShieldAlert,
-  Clock, Flame, CheckCircle, BarChart4, ChevronRight, Activity, Smile
+  FileText, ArrowLeft, RefreshCw, Download, Printer, 
+  Target, BookOpen, Layers, FileJson, CheckCircle2, 
+  TrendingUp, TrendingDown, Award, Lightbulb, Flame, CheckCircle
 } from "lucide-react";
 import { Panel } from "@/components/ui/Panel";
-import { Badge } from "@/components/ui/Badge";
 import { EmptyState } from "@/components/ui/EmptyState";
 import { WeeklyReviewReport } from "@/lib/services/weeklyReview";
 
 export default function WeeklyReviewPage() {
-  const router = useRouter();
   const { year, week } = useParams() as { year: string; week: string };
   const [report, setReport] = React.useState<WeeklyReviewReport | null>(null);
   const [loading, setLoading] = React.useState(true);
   const [refreshing, setRefreshing] = React.useState(false);
 
-  const fetchReport = async () => {
-    try {
-      const res = await fetch(`/api/reviews/${year}/${week}`);
-      if (res.ok) {
-        const data = await res.json();
-        setReport(data.report);
-      }
-    } catch (err) {
-      console.error("Failed loading weekly review:", err);
-    } finally {
-      setLoading(false);
-    }
-  };
-
   React.useEffect(() => {
+    const fetchReport = async () => {
+      try {
+        const res = await fetch(`/api/reviews/${year}/${week}`);
+        if (res.ok) {
+          const data = await res.json();
+          setReport(data.report);
+        }
+      } catch (err) {
+        console.error("Failed loading weekly review:", err);
+      } finally {
+        setLoading(false);
+      }
+    };
+
     fetchReport();
   }, [year, week]);
 
@@ -311,7 +308,7 @@ export default function WeeklyReviewPage() {
               </h2>
             </div>
 
-            <div className="grid grid-cols-2 sm:grid-cols-3 gap-4 text-zinc-400 print:text-black">
+            <div className="grid grid-cols-2 md:grid-cols-4 gap-4 text-zinc-400 print:text-black">
               
               <div className="bg-zinc-950/40 p-3.5 rounded border border-border-subtle/50 print:bg-white print:border-black">
                 <span className="text-[9px] uppercase text-zinc-500 block font-bold">Reading Frequency</span>
@@ -337,6 +334,17 @@ export default function WeeklyReviewPage() {
                 <div className="text-[8px] text-zinc-500 mt-1 uppercase space-y-0.5">
                   <div>vs prev: {report.habitReview.avgSleepHoursDiffPrev >= 0 ? `+${report.habitReview.avgSleepHoursDiffPrev}` : report.habitReview.avgSleepHoursDiffPrev}h</div>
                   <div>vs 30d: {report.habitReview.avgSleepHoursDiff30d >= 0 ? `+${report.habitReview.avgSleepHoursDiff30d}` : report.habitReview.avgSleepHoursDiff30d}h</div>
+                </div>
+              </div>
+
+              <div className="bg-zinc-950/40 p-3.5 rounded border border-border-subtle/50 print:bg-white print:border-black">
+                <span className="text-[9px] uppercase text-zinc-500 block font-bold">Avg Mobile Screen Time</span>
+                <span className="text-white print:text-black font-bold text-sm block mt-0.5">
+                  {report.habitReview.avgMobileScreenTime ? `${Math.floor(report.habitReview.avgMobileScreenTime / 60)}h ${report.habitReview.avgMobileScreenTime % 60}m` : "Not Logged"}
+                </span>
+                <div className="text-[8px] text-zinc-500 mt-1 uppercase space-y-0.5">
+                  <div>vs prev: {report.habitReview.avgMobileScreenTimeDiffPrev >= 0 ? `+${report.habitReview.avgMobileScreenTimeDiffPrev}` : report.habitReview.avgMobileScreenTimeDiffPrev}m</div>
+                  <div>vs 30d: {report.habitReview.avgMobileScreenTimeDiff30d >= 0 ? `+${report.habitReview.avgMobileScreenTimeDiff30d}` : report.habitReview.avgMobileScreenTimeDiff30d}m</div>
                 </div>
               </div>
 

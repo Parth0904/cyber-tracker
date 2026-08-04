@@ -3,7 +3,6 @@
 
 import { BrainCircuit } from "lucide-react";
 import {Panel} from "@/components/ui/Panel";
-import {Badge} from "@/components/ui/Badge";
 
 type FocusProps = {
   habit: string;
@@ -13,7 +12,7 @@ type FocusProps = {
   confidence: number;
 };
 
-export default function FocusWidget({ habit, strength, recommendation, explanation, confidence }: FocusProps) {
+export default function FocusWidget({ habit, recommendation, explanation, confidence }: FocusProps) {
   return (
     <Panel title="Today's Core Optimization Focus">
       <div className="space-y-6">

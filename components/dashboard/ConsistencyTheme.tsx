@@ -1,6 +1,7 @@
 "use client";
 
 import * as React from "react";
+import { usePathname } from "next/navigation";
 
 type ConsistencyState = "green" | "amber" | "red";
 
@@ -12,9 +13,11 @@ type ConsistencyContextType = {
 const ConsistencyContext = React.createContext<ConsistencyContextType | undefined>(undefined);
 
 export function ConsistencyProvider({ children }: { children: React.ReactNode }) {
+  const pathname = usePathname();
   const [state, setState] = React.useState<ConsistencyState>("red"); // default to lowest state
 
   const refresh = React.useCallback(async () => {
+    if (pathname === "/login") return;
     try {
       const res = await fetch("/api/consistency");
       if (res.ok) {
@@ -35,7 +38,7 @@ export function ConsistencyProvider({ children }: { children: React.ReactNode })
     } catch (err) {
       console.error("Failed to load consistency theme:", err);
     }
-  }, []);
+  }, [pathname]);
 
   React.useEffect(() => {
     refresh();

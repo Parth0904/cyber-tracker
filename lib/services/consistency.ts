@@ -38,10 +38,11 @@ export async function calculateConsistency(): Promise<ConsistencyResult> {
       const wakeTimeSet = entry?.wake_time ? 1 : 0;
       const workoutSet = entry?.workout ? 1 : 0;
       const readingSet = entry?.reading ? 1 : 0;
+      const mobileScreenTimeSet = entry?.mobile_screen_time !== undefined && entry?.mobile_screen_time !== null && entry?.mobile_screen_time > 0 ? 1 : 0;
       const logSet = entry?.notes && entry.notes.trim() !== "" ? 1 : 0;
 
-      const completedHabits = bedTimeSet + wakeTimeSet + workoutSet + readingSet + logSet;
-      const habitRate = completedHabits / 5;
+      const completedHabits = bedTimeSet + wakeTimeSet + workoutSet + readingSet + mobileScreenTimeSet + logSet;
+      const habitRate = completedHabits / 6;
 
       habitSum += habitRate;
       workoutSum += workoutSet;

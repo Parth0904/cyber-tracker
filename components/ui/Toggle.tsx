@@ -7,7 +7,7 @@ export interface ToggleProps extends React.InputHTMLAttributes<HTMLInputElement>
 export const Toggle = React.forwardRef<HTMLInputElement, ToggleProps>(
   ({ className = "", label, checked, onChange, ...props }, ref) => {
     return (
-      <label className="inline-flex items-center gap-2 cursor-pointer select-none">
+      <label className={`inline-flex items-center gap-2 cursor-pointer select-none ${className}`}>
         <div className="relative">
           <input
             type="checkbox"

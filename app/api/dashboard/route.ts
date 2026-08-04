@@ -65,20 +65,22 @@ export async function GET() {
   return NextResponse.json({
     completion: {
       percent: completionInfo.percent,
-      completedCount: 5 - completionInfo.missingCount,
-      totalCount: 5,
+      completedCount: 6 - completionInfo.missingCount,
+      totalCount: 6,
       missing: completionInfo.missing,
       entry: entry ? {
         bedTime: entry.bed_time || "",
         wakeTime: entry.wake_time || "",
         workout: Boolean(entry.workout),
         reading: Boolean(entry.reading),
+        mobileScreenTime: entry.mobile_screen_time !== undefined && entry.mobile_screen_time !== null ? entry.mobile_screen_time : null,
         notes: entry.notes || "",
       } : {
         bedTime: "",
         wakeTime: "",
         workout: false,
         reading: false,
+        mobileScreenTime: null,
         notes: "",
       }
     },

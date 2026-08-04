@@ -1,9 +1,10 @@
 "use client";
 
 import * as React from "react";
-import { Play, Pause, Square, Layers, Terminal } from "lucide-react";
+import { Play, Pause, Square, Terminal } from "lucide-react";
 import { Button } from "@/components/ui/Button";
 import { Badge } from "@/components/ui/Badge";
+import { usePathname } from "next/navigation";
 
 type ActiveSessionState = {
   id: number;
@@ -15,11 +16,13 @@ type ActiveSessionState = {
 };
 
 export function SessionHudWidget() {
+  const pathname = usePathname();
   const [active, setActive] = React.useState<ActiveSessionState | null>(null);
   const [elapsed, setElapsed] = React.useState("00:00:00");
   const [isPaused, setIsPaused] = React.useState(false);
 
   React.useEffect(() => {
+    if (pathname === "/login") return;
     // Poll local storage or session endpoint to capture status across tab navigations
     async function checkActiveSession() {
       try {
@@ -40,7 +43,7 @@ export function SessionHudWidget() {
     checkActiveSession();
     const interval = setInterval(checkActiveSession, 10000);
     return () => clearInterval(interval);
-  }, []);
+  }, [pathname]);
 
   React.useEffect(() => {
     if (!active || isPaused) return;
@@ -60,7 +63,7 @@ export function SessionHudWidget() {
     return () => clearInterval(timer);
   }, [active, isPaused]);
 
-  if (!active) return null;
+  if (pathname === "/login" || !active) return null;
 
   return (
     <div className="fixed bottom-4 right-4 z-50 bg-black border border-accent-cyan/40 rounded-lg p-4 shadow-2xl w-80 font-mono text-xs text-zinc-200 animate-in fade-in slide-in-from-bottom-4 duration-200">

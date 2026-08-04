@@ -10,12 +10,12 @@ export type Streak = {
 function isCompleted(entry: DailyEntry) {
   let score = 0;
 
-  if (entry.sleep_hours >= 7) score++;
-  if (entry.reading >= 30) score++;
-  if (entry.workout) score++;
-  if (entry.steps >= 8000) score++;
   if (entry.bed_time) score++;
-  if (entry.focus_feeling) score++;
+  if (entry.wake_time) score++;
+  if (entry.workout) score++;
+  if (entry.reading) score++;
+  if (entry.mobile_screen_time !== undefined && entry.mobile_screen_time !== null && entry.mobile_screen_time > 0) score++;
+  if (entry.notes && entry.notes.trim() !== "") score++;
 
   return score >= 5;
 }

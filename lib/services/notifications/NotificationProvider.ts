@@ -1,10 +1,22 @@
+export type MetricComparison = {
+  current: number;
+  previous: number;
+};
+
 export type ParentReportData = {
   weekNumber: number;
   consistencyState: "Green" | "Amber" | "Red";
-  huntingHours: number;
-  learningHours: number;
+  consistencyScore: number;
   reportsSubmitted: number;
   validReports: number;
+  dailyLogsCompleted: number;
+
+  hunting: MetricComparison;
+  learning: MetricComparison;
+  reading: MetricComparison;
+  workout: MetricComparison;
+  sleep: MetricComparison;
+  screenTime: MetricComparison;
 };
 
 export interface NotificationProvider {

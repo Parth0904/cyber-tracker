@@ -1,6 +1,6 @@
-import { NextRequest, NextResponse } from "next/server";
+import { NextResponse } from "next/server";
 import { getISOWeek, getISOWeekYear, subWeeks } from "date-fns";
-import { getAllWeeklyReviews, saveWeeklyReview } from "@/lib/repositories/weeklyReview";
+import { getAllWeeklyReviews } from "@/lib/repositories/weeklyReview";
 import { getAllDailyEntries } from "@/lib/repositories/dailyEntries";
 import { getAllSessions } from "@/lib/repositories/targetSessions";
 import { getAllLearningSessions } from "@/lib/repositories/learning";
@@ -91,10 +91,8 @@ export async function GET() {
 }
 
 // POST: Cron-trigger endpoint to compile the review for the week that just ended
-export async function POST(req: NextRequest) {
+export async function POST() {
   try {
-    const body = await req.json().catch(() => ({}));
-    
     // Default to the week that just ended (1 week ago from current time)
     const today = new Date();
     const lastWeekDate = subWeeks(today, 1);

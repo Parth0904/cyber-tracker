@@ -5,7 +5,6 @@ import Link from "next/link";
 import { 
   FileText, Plus, ChevronRight, RefreshCw 
 } from "lucide-react";
-import { Panel } from "@/components/ui/Panel";
 import { Badge } from "@/components/ui/Badge";
 import { EmptyState } from "@/components/ui/EmptyState";
 

@@ -12,9 +12,9 @@ export class TelegramProvider implements NotificationProvider {
       }
 
       const signalEmoji = {
-        Green: "🟢 Green",
-        Amber: "🟡 Amber",
-        Red: "🔴 Red",
+        Green: "🟢",
+        Amber: "🟡",
+        Red: "🔴",
       }[reportData.consistencyState];
 
       const telegramBody = `
@@ -25,16 +25,19 @@ Recipient Chat ID: ${recipient}
 Parent Name: ${parentName}
 Channel: Telegram Bot API (Mock Endpoint)
 
-Weekly report automatically compiled by Cyber Tracker for ${parentName}:
+Week: Week ${reportData.weekNumber}
+Status: ${signalEmoji} ${reportData.consistencyState}
+Consistency Score: ${reportData.consistencyScore}/100
 
-Week Number: Week ${reportData.weekNumber}
-Consistency Signal: ${signalEmoji}
-Hunting Hours: ${reportData.huntingHours.toFixed(1)}h
-Learning Hours: ${reportData.learningHours.toFixed(1)}h
+Hunting Hours: ${reportData.hunting.current.toFixed(1)}h
+Learning Hours: ${reportData.learning.current.toFixed(1)}h
 Reports Submitted: ${reportData.reportsSubmitted}
 Valid Reports: ${reportData.validReports}
-
-Generated Automatically by Cyber Tracker.
+Workout: ${reportData.workout.current} days completed
+Reading: ${reportData.reading.current} days completed
+Average Sleep: ${reportData.sleep.current.toFixed(1)}h
+Average Screen Time: ${reportData.screenTime.current}m
+Daily Logs: ${reportData.dailyLogsCompleted} days completed
 =========================================
 `;
       console.log(telegramBody);

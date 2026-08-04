@@ -94,7 +94,25 @@ export default function LearningTopicDetailsPage() {
   };
   const toISO = (local: string) => local ? new Date(local).toISOString() : "";
 
-  const fetchData = async () => {
+  const formatLocalDateTime = (date: Date) => {
+    const pad = (num: number) => num.toString().padStart(2, "0");
+    const yyyy = date.getFullYear();
+    const MM = pad(date.getMonth() + 1);
+    const dd = pad(date.getDate());
+    const hh = pad(date.getHours());
+    const mm = pad(date.getMinutes());
+    return `${yyyy}-${MM}-${dd}T${hh}:${mm}`;
+  };
+
+  const adjustDateTime = (currentVal: string, minutes: number) => {
+    if (!currentVal) return formatLocalDateTime(new Date());
+    const d = new Date(currentVal);
+    if (isNaN(d.getTime())) return formatLocalDateTime(new Date());
+    d.setMinutes(d.getMinutes() + minutes);
+    return formatLocalDateTime(d);
+  };
+
+  const fetchData = React.useCallback(async () => {
     try {
       const res = await fetch(`/api/learning/topics/${topicId}`);
       if (res.ok) {
@@ -107,9 +125,9 @@ export default function LearningTopicDetailsPage() {
     } finally {
       setLoading(false);
     }
-  };
+  }, [topicId]);
 
-  const checkActiveSession = async () => {
+  const checkActiveSession = React.useCallback(async () => {
     try {
       const res = await fetch("/api/sessions");
       if (res.ok) {
@@ -124,7 +142,7 @@ export default function LearningTopicDetailsPage() {
     } catch (err) {
       console.error("Failed checking active sessions status:", err);
     }
-  };
+  }, [topicId]);
 
   React.useEffect(() => {
     if (!topicId) return;
@@ -135,7 +153,7 @@ export default function LearningTopicDetailsPage() {
       checkActiveSession();
     }, 5000);
     return () => clearInterval(interval);
-  }, [topicId]);
+  }, [topicId, fetchData, checkActiveSession]);
 
   // Live Timer Effect
   React.useEffect(() => {
@@ -464,18 +482,63 @@ export default function LearningTopicDetailsPage() {
         </div>
       </InlineModal>
 
-      {/* Edit session */}
       <InlineModal isOpen={isEditSessionOpen && !!editingSession} onClose={() => setIsEditSessionOpen(false)} title="Edit Session Times">
         <form onSubmit={handleSaveEdit} className="space-y-4 font-mono text-xs">
           <div className="space-y-1.5">
             <label className="block text-[10px] text-zinc-500 uppercase">Start Time</label>
             <input type="datetime-local" value={editStart} onChange={(e) => setEditStart(e.target.value)}
               className="w-full bg-black border border-border-subtle rounded-md text-xs px-3 py-2 text-zinc-300 focus:outline-none focus:border-success-emerald font-mono h-9" required />
+            <div className="flex gap-1.5 mt-1.5 flex-wrap">
+              <button
+                type="button"
+                onClick={() => setEditStart(adjustDateTime(editStart, -30))}
+                className="px-2 py-1 rounded bg-zinc-900 border border-zinc-800 text-[10px] text-zinc-400 hover:text-success-emerald hover:border-success-emerald/40 transition-colors cursor-pointer"
+              >
+                -30m
+              </button>
+              <button
+                type="button"
+                onClick={() => setEditStart(formatLocalDateTime(new Date()))}
+                className="px-2 py-1 rounded bg-zinc-900 border border-zinc-800 text-[10px] text-zinc-400 hover:text-success-emerald hover:border-success-emerald/40 transition-colors cursor-pointer"
+              >
+                Current Time
+              </button>
+              <button
+                type="button"
+                onClick={() => setEditStart(adjustDateTime(editStart, 30))}
+                className="px-2 py-1 rounded bg-zinc-900 border border-zinc-800 text-[10px] text-zinc-400 hover:text-success-emerald hover:border-success-emerald/40 transition-colors cursor-pointer"
+              >
+                +30m
+              </button>
+            </div>
           </div>
           <div className="space-y-1.5">
             <label className="block text-[10px] text-zinc-500 uppercase">End Time</label>
             <input type="datetime-local" value={editEnd} onChange={(e) => setEditEnd(e.target.value)}
               className="w-full bg-black border border-border-subtle rounded-md text-xs px-3 py-2 text-zinc-300 focus:outline-none focus:border-success-emerald font-mono h-9" required />
+            <div className="flex gap-1.5 mt-1.5 flex-wrap">
+              <button
+                type="button"
+                onClick={() => setEditEnd(adjustDateTime(editEnd, -30))}
+                className="px-2 py-1 rounded bg-zinc-900 border border-zinc-800 text-[10px] text-zinc-400 hover:text-success-emerald hover:border-success-emerald/40 transition-colors cursor-pointer"
+              >
+                -30m
+              </button>
+              <button
+                type="button"
+                onClick={() => setEditEnd(formatLocalDateTime(new Date()))}
+                className="px-2 py-1 rounded bg-zinc-900 border border-zinc-800 text-[10px] text-zinc-400 hover:text-success-emerald hover:border-success-emerald/40 transition-colors cursor-pointer"
+              >
+                Current Time
+              </button>
+              <button
+                type="button"
+                onClick={() => setEditEnd(adjustDateTime(editEnd, 30))}
+                className="px-2 py-1 rounded bg-zinc-900 border border-zinc-800 text-[10px] text-zinc-400 hover:text-success-emerald hover:border-success-emerald/40 transition-colors cursor-pointer"
+              >
+                +30m
+              </button>
+            </div>
           </div>
           <div className="flex justify-end gap-2 pt-2">
             <Button type="button" variant="secondary" onClick={() => setIsEditSessionOpen(false)}>Cancel</Button>

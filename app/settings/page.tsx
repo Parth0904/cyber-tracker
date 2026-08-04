@@ -11,6 +11,7 @@ import {
   Loader2,
   Check,
   LogOut,
+  Mail,
 } from "lucide-react";
 import { signOut } from "next-auth/react";
 
@@ -31,6 +32,7 @@ export default function SettingsPage() {
   const [parentConfigLoading, setParentConfigLoading] = useState(true);
   const [saveLoading, setSaveLoading] = useState(false);
   const [testLoading, setTestLoading] = useState(false);
+  const [testEmailLoading, setTestEmailLoading] = useState(false);
   const [saveSuccess, setSaveSuccess] = useState(false);
   const [testResult, setTestResult] = useState<string | null>(null);
 
@@ -97,6 +99,32 @@ export default function SettingsPage() {
       setTestResult(`Error: ${err.message || "Failed to initiate test report dispatch."}`);
     } finally {
       setTestLoading(false);
+    }
+  }
+
+  async function handleSendTestEmail() {
+    setTestEmailLoading(true);
+    setTestResult(null);
+    try {
+      await fetch("/api/settings/parent-report", {
+        method: "POST",
+        headers: { "Content-Type": "application/json" },
+        body: JSON.stringify(parentConfig),
+      });
+
+      const res = await fetch("/api/settings/parent-report/test-email", {
+        method: "POST",
+      });
+      const data = await res.json();
+      if (res.ok) {
+        setTestResult("Test email sent successfully. Check your configured inbox.");
+      } else {
+        setTestResult(`Error: ${data.error || "Failed to send test email."}`);
+      }
+    } catch (err: any) {
+      setTestResult(`Error: ${err.message || "Failed to initiate test email dispatch."}`);
+    } finally {
+      setTestEmailLoading(false);
     }
   }
 
@@ -376,15 +404,27 @@ export default function SettingsPage() {
                 </button>
 
                 {parentConfig.enabled === 1 && (
-                  <button
-                    type="button"
-                    onClick={handleTestParentReport}
-                    className="settings-btn secondary"
-                    disabled={testLoading}
-                  >
-                    {testLoading ? <Loader2 size={16} className="spin" /> : <FileText size={16} />}
-                    {testLoading ? "Dispatching..." : "Send Test Report"}
-                  </button>
+                  <>
+                    <button
+                      type="button"
+                      onClick={handleTestParentReport}
+                      className="settings-btn secondary"
+                      disabled={testLoading || testEmailLoading}
+                    >
+                      {testLoading ? <Loader2 size={16} className="spin" /> : <FileText size={16} />}
+                      {testLoading ? "Dispatching..." : "Send Test Report"}
+                    </button>
+
+                    <button
+                      type="button"
+                      onClick={handleSendTestEmail}
+                      className="settings-btn secondary"
+                      disabled={testLoading || testEmailLoading}
+                    >
+                      {testEmailLoading ? <Loader2 size={16} className="spin" /> : <Mail size={16} />}
+                      {testEmailLoading ? "Sending Email..." : "Send Test Email"}
+                    </button>
+                  </>
                 )}
               </div>
 

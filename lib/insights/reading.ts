@@ -1,7 +1,6 @@
 import { Insight } from "./index";
 import {
   analyzeBuckets,
-  getStrength,
 } from "./analyzer";
 
 export function generateReadingInsight(

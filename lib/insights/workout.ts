@@ -1,7 +1,7 @@
+/* eslint-disable @typescript-eslint/no-unused-vars */
 import { Insight } from "./index";
 import {
   analyzeBuckets,
-  getStrength,
 } from "./analyzer";
 
 export function generateWorkoutInsight(
@@ -10,7 +10,7 @@ export function generateWorkoutInsight(
     workout: number;
   }[],
   scoreMap: Record<string, number>,
-  todayWorkout: number
+  _todayWorkout: number
 ): Insight {
 
   const values = entries.map((day) => ({

@@ -3,7 +3,6 @@ import { getAllDailyEntries } from "@/lib/repositories/dailyEntries";
 import { getAllSessions } from "@/lib/repositories/targetSessions";
 import { getAllLearningSessions, getAllTopics } from "@/lib/repositories/learning";
 import { getAllFindings } from "@/lib/repositories/targetFindings";
-import { getAllTargets } from "@/lib/repositories/targets";
 import { calculateConsistency } from "@/lib/services/consistency";
 
 // Helpers for Confidence rating
@@ -71,6 +70,7 @@ export type CorrelationEngineResult = {
     sleepHours: number;
     bedTimeMinutes: number;
     wakeTimeMinutes: number;
+    mobileScreenTime: number;
     consistency: number;
     completionPercent: number;
   }[];
@@ -81,6 +81,7 @@ export type CorrelationEngineResult = {
     bedTime: any;
     wakeTime: any;
     learning: any;
+    mobileScreenTime: any;
   };
 };
 
@@ -262,13 +263,15 @@ export async function getCorrelationDiagnostics(): Promise<CorrelationEngineResu
     const sleepHours = entry?.sleep_hours ?? 0;
     const bedTimeMinutes = parseTimeToMinutes(entry?.bed_time) ?? 0;
     const wakeTimeMinutes = parseTimeToMinutes(entry?.wake_time) ?? 0;
+    const mobileScreenTime = entry?.mobile_screen_time ?? 0;
     
     const bSet = entry?.bed_time ? 1 : 0;
     const wSet = entry?.wake_time ? 1 : 0;
     const woSet = entry?.workout ? 1 : 0;
     const rSet = entry?.reading ? 1 : 0;
+    const scrSet = entry?.mobile_screen_time !== undefined && entry?.mobile_screen_time !== null && entry?.mobile_screen_time > 0 ? 1 : 0;
     const lSet = entry?.notes && entry.notes.trim() !== "" ? 1 : 0;
-    const completionPercent = ((bSet + wSet + woSet + rSet + lSet) / 5) * 100;
+    const completionPercent = ((bSet + wSet + woSet + rSet + scrSet + lSet) / 6) * 100;
     
     // Calculate rolling 7-day consistency score up to this date
     let consistencyScore = 0;
@@ -288,9 +291,10 @@ export async function getCorrelationDiagnostics(): Promise<CorrelationEngineResu
       const wS = targetEntry?.wake_time ? 1 : 0;
       const woS = targetEntry?.workout ? 1 : 0;
       const rS = targetEntry?.reading ? 1 : 0;
+      const scrS = targetEntry?.mobile_screen_time !== undefined && targetEntry?.mobile_screen_time !== null && targetEntry?.mobile_screen_time > 0 ? 1 : 0;
       const lS = targetEntry?.notes && targetEntry.notes.trim() !== "" ? 1 : 0;
       
-      habitSum += (bS + wS + woS + rS + lS) / 5;
+      habitSum += (bS + wS + woS + rS + scrS + lS) / 6;
       workoutSum += woS;
       readingSum += rS;
       loggingSum += lS;
@@ -315,6 +319,7 @@ export async function getCorrelationDiagnostics(): Promise<CorrelationEngineResu
       sleepHours,
       bedTimeMinutes,
       wakeTimeMinutes,
+      mobileScreenTime,
       consistency: consistencyScore,
       completionPercent,
     });
@@ -576,6 +581,55 @@ export async function getCorrelationDiagnostics(): Promise<CorrelationEngineResu
     };
   }
 
+  // 7. Mobile Screen Time Insight
+  // Low Screen Time (< 2 hours, i.e., 120 mins) vs High Screen Time (>= 2 hours, i.e., 120 mins)
+  const lowScreenDates = dailyEntries.filter(e => e.mobile_screen_time !== null && e.mobile_screen_time !== undefined && e.mobile_screen_time < 120).map(e => e.date);
+  const highScreenDates = dailyEntries.filter(e => e.mobile_screen_time !== null && e.mobile_screen_time !== undefined && e.mobile_screen_time >= 120).map(e => e.date);
+
+  let mobileScreenTimeInsight: any = { status: "insufficient_data" };
+  if (dailyEntries.length >= 5 && lowScreenDates.length >= 2 && highScreenDates.length >= 2) {
+    const avgHuntingLow = getHuntingHoursOnDates(lowScreenDates) / lowScreenDates.length;
+    const avgHuntingHigh = getHuntingHoursOnDates(highScreenDates) / highScreenDates.length;
+
+    const avgLearningLow = getLearningHoursOnDates(lowScreenDates) / lowScreenDates.length;
+    const avgLearningHigh = getLearningHoursOnDates(highScreenDates) / highScreenDates.length;
+
+    const readingLowCount = dailyEntries.filter(e => lowScreenDates.includes(e.date) && e.reading === 1).length;
+    const readingLowPct = (readingLowCount / lowScreenDates.length) * 100;
+    const readingHighCount = dailyEntries.filter(e => highScreenDates.includes(e.date) && e.reading === 1).length;
+    const readingHighPct = (readingHighCount / highScreenDates.length) * 100;
+
+    const sleepHoursLow = dailyEntries.filter(e => lowScreenDates.includes(e.date)).reduce((acc, e) => acc + (e.sleep_hours || 0), 0) / lowScreenDates.length;
+    const sleepHoursHigh = dailyEntries.filter(e => highScreenDates.includes(e.date)).reduce((acc, e) => acc + (e.sleep_hours || 0), 0) / highScreenDates.length;
+
+    const consistencyLow = getAvgCompletionOnDates(lowScreenDates);
+    const consistencyHigh = getAvgCompletionOnDates(highScreenDates);
+
+    const reportsLow = targetFindings.filter(f => lowScreenDates.includes(f.submitted_at)).length / lowScreenDates.length;
+    const reportsHigh = targetFindings.filter(f => highScreenDates.includes(f.submitted_at)).length / highScreenDates.length;
+
+    mobileScreenTimeInsight = {
+      status: "success",
+      confidence: getConfidenceRating(lowScreenDates.length + highScreenDates.length),
+      lowScreen: {
+        avgHunting: Math.round(avgHuntingLow * 10) / 10,
+        avgLearning: Math.round(avgLearningLow * 10) / 10,
+        readingPct: Math.round(readingLowPct),
+        avgSleep: Math.round(sleepHoursLow * 10) / 10,
+        avgConsistency: Math.round(consistencyLow),
+        avgReports: Math.round(reportsLow * 100) / 100,
+      },
+      highScreen: {
+        avgHunting: Math.round(avgHuntingHigh * 10) / 10,
+        avgLearning: Math.round(avgLearningHigh * 10) / 10,
+        readingPct: Math.round(readingHighPct),
+        avgSleep: Math.round(sleepHoursHigh * 10) / 10,
+        avgConsistency: Math.round(consistencyHigh),
+        avgReports: Math.round(reportsHigh * 100) / 100,
+      }
+    };
+  }
+
   return {
     overview: {
       totalHuntingHours,
@@ -608,6 +662,7 @@ export async function getCorrelationDiagnostics(): Promise<CorrelationEngineResu
       bedTime: bedTimeInsight,
       wakeTime: wakeTimeInsight,
       learning: learningInsight,
+      mobileScreenTime: mobileScreenTimeInsight,
     },
   };
 }

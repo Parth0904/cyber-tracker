@@ -13,10 +13,6 @@ import {
 } from "@/lib/evaluation";
 
 import {
-  generateInsights,
-} from "@/lib/insights";
-
-import {
   ActivityRow,
   DailyEntry,
 } from "@/lib/types";
@@ -86,16 +82,7 @@ export function generateHistoryTimeline(
           )
         );
 
-      const {
-  focus,
-  insights,
-} = generateInsights(
-  entries,
-  activities,
-  entry
-);
-
-     return {
+      return {
 
   id: entry.date,
 

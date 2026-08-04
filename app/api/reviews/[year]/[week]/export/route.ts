@@ -120,6 +120,7 @@ ${report.discoveries.map((d: any) => `- **Observation**: ${d.text}\n  *Confidenc
 - **Average Sleep hours**: ${report.habitReview.avgSleepHours.toFixed(1)}h (change vs prev week: ${report.habitReview.avgSleepHoursDiffPrev >= 0 ? `+${report.habitReview.avgSleepHoursDiffPrev}` : report.habitReview.avgSleepHoursDiffPrev}h, vs 30d: ${report.habitReview.avgSleepHoursDiff30d >= 0 ? `+${report.habitReview.avgSleepHoursDiff30d}` : report.habitReview.avgSleepHoursDiff30d}h)
 - **Averaged Bedtime**: ${report.habitReview.avgBedTime}
 - **Averaged Wake Time**: ${report.habitReview.avgWakeTime}
+- **Average Mobile Screen Time**: ${report.habitReview.avgMobileScreenTime}m (change vs prev week: ${report.habitReview.avgMobileScreenTimeDiffPrev >= 0 ? `+${report.habitReview.avgMobileScreenTimeDiffPrev}` : report.habitReview.avgMobileScreenTimeDiffPrev}m, vs 30d: ${report.habitReview.avgMobileScreenTimeDiff30d >= 0 ? `+${report.habitReview.avgMobileScreenTimeDiff30d}` : report.habitReview.avgMobileScreenTimeDiff30d}m)
 - **Habit Completion Rate**: ${report.habitReview.completionRate}%
 - **Habit Consistency Score**: ${report.habitReview.consistencyScore}%
 

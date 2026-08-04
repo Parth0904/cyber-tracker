@@ -4,7 +4,7 @@ import { generateReadingInsight } from "./reading";
 import { generateSleepInsight } from "./sleep";
 import { generateBedTimeInsight } from "./bedtime";
 import { generateWorkoutInsight } from "./workout";
-import { generateStepsInsight } from "./steps";
+import { generateMobileScreenTimeInsight } from "./mobileScreenTime";
 
 import {
   ActivityRow,
@@ -72,10 +72,10 @@ export function generateInsights(
       today.workout
     ),
 
-    generateStepsInsight(
+    generateMobileScreenTimeInsight(
       dailyEntries,
       scoreMap,
-      today.steps
+      today.mobile_screen_time ?? null
     ),
 
   ];

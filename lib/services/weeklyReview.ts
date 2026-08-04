@@ -14,7 +14,7 @@ import { getAllLearningSessions } from "@/lib/repositories/learning";
 import { getAllFindings } from "@/lib/repositories/targetFindings";
 import { getAllTargets } from "@/lib/repositories/targets";
 import { getCorrelationDiagnostics } from "@/lib/services/correlationEngine";
-import { getWeeklyReview, saveWeeklyReview } from "@/lib/repositories/weeklyReview";
+import { saveWeeklyReview } from "@/lib/repositories/weeklyReview";
 
 export type ComparisonMetric = {
   thisWeekValue: number;
@@ -51,6 +51,9 @@ export type HabitReviewDetail = {
   avgSleepHoursDiff30d: number;
   avgBedTime: string;
   avgWakeTime: string;
+  avgMobileScreenTime: number;
+  avgMobileScreenTimeDiffPrev: number;
+  avgMobileScreenTimeDiff30d: number;
   completionRate: number;
   consistencyScore: number;
 };
@@ -134,7 +137,7 @@ function parseTimeToMinutes(timeStr?: string | null): number | null {
   if (!timeStr) return null;
   const match = timeStr.match(/^([0-1]?[0-9]|2[0-3]):([0-5][0-9])$/);
   if (!match) return null;
-  const [_, h, m] = match;
+  const [, h, m] = match;
   return Number(h) * 60 + Number(m);
 }
 
@@ -272,10 +275,6 @@ export async function generateWeeklyReviewReport(year: number, week: number): Pr
   const targetSessions30d = allTargetSessions.filter(s => s.started_at && s.started_at.split("T")[0] >= start30dStr && s.started_at.split("T")[0] <= end30dStr);
   const learningSessions30d = allLearningSessions.filter(s => s.started_at && s.started_at.split("T")[0] >= start30dStr && s.started_at.split("T")[0] <= end30dStr);
   const findings30d = allFindings.filter(f => f.submitted_at && f.submitted_at >= start30dStr && f.submitted_at <= end30dStr);
-  const sessionsCombined30d = [
-    ...targetSessions30d.map(s => ({ started_at: s.started_at })),
-    ...learningSessions30d.map(s => ({ started_at: s.started_at })),
-  ];
 
   // ================= SECTION 2: WORK SUMMARY =================
   const totalHuntingHours = thisWeekTargetSessions.reduce((acc, s) => acc + (s.duration || 0), 0) / 60;
@@ -311,12 +310,16 @@ export async function generateWeeklyReviewReport(year: number, week: number): Pr
   const avgValidWeekly30d = (valid30d / 30) * 7;
 
   // Consistency average 30d
+  const allSessionsCombined = [
+    ...allTargetSessions.map(s => ({ started_at: s.started_at })),
+    ...allLearningSessions.map(s => ({ started_at: s.started_at })),
+  ];
+
   let sumDailyConsistency30d = 0;
   for (let i = 0; i < 30; i++) {
     const d = new Date(start30d);
     d.setDate(d.getDate() + i);
-    const dateStr = d.toISOString().split("T")[0];
-    const score = calculateConsistencyForWeek(d, entries30d, sessionsCombined30d);
+    const score = calculateConsistencyForWeek(d, allEntries, allSessionsCombined);
     sumDailyConsistency30d += score;
   }
   const avgConsistency30d = Math.round(sumDailyConsistency30d / 30);
@@ -449,14 +452,33 @@ export async function generateWeeklyReviewReport(year: number, week: number): Pr
   const avgBedTime = averageTimeOfStatus(bedTimes);
   const avgWakeTime = averageTimeOfStatus(wakeTimes);
 
+  // Mobile Screen Time averages
+  const getScreenTimeForEntries = (entries: any[]) => {
+    const times = entries
+      .map(e => e.mobile_screen_time)
+      .filter((t): t is number => t !== null && t !== undefined);
+    if (times.length === 0) return 0;
+    return times.reduce((sum, t) => sum + t, 0) / times.length;
+  };
+
+  const avgMobileScreenTime = getScreenTimeForEntries(thisWeekEntries);
+  const prevAvgMobileScreenTime = getScreenTimeForEntries(prevWeekEntries);
+  const avgMobileScreenTime30d = getScreenTimeForEntries(entries30d);
+
   // Completion rates
   const getCompletionRate = (entries: any[]) => {
     if (entries.length === 0) return 0;
     let completed = 0;
     let total = 0;
     entries.forEach(e => {
-      completed += (e.bed_time ? 1 : 0) + (e.wake_time ? 1 : 0) + (e.workout ? 1 : 0) + (e.reading ? 1 : 0) + (e.notes && e.notes.trim() !== "" ? 1 : 0);
-      total += 5;
+      const bSet = e.bed_time ? 1 : 0;
+      const wSet = e.wake_time ? 1 : 0;
+      const woSet = e.workout ? 1 : 0;
+      const rSet = e.reading ? 1 : 0;
+      const scrSet = e.mobile_screen_time !== null && e.mobile_screen_time !== undefined && e.mobile_screen_time > 0 ? 1 : 0;
+      const lSet = e.notes && e.notes.trim() !== "" ? 1 : 0;
+      completed += bSet + wSet + woSet + rSet + scrSet + lSet;
+      total += 6;
     });
     return Math.round((completed / total) * 100);
   };
@@ -475,6 +497,9 @@ export async function generateWeeklyReviewReport(year: number, week: number): Pr
     avgSleepHoursDiff30d: Math.round((avgSleepHours - avgSleepHours30d) * 10) / 10,
     avgBedTime,
     avgWakeTime,
+    avgMobileScreenTime: Math.round(avgMobileScreenTime),
+    avgMobileScreenTimeDiffPrev: Math.round(avgMobileScreenTime - prevAvgMobileScreenTime),
+    avgMobileScreenTimeDiff30d: Math.round(avgMobileScreenTime - avgMobileScreenTime30d),
     completionRate,
     consistencyScore,
   };

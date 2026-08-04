@@ -78,12 +78,6 @@ export function generateGoals(
       goals.sleep
     ),
 
-    calculateGoalProgress(
-      "Steps",
-      daily.steps,
-      goals.steps
-    ),
-
   ];
 
 }

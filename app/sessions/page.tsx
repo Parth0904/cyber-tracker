@@ -112,8 +112,26 @@ export default function SessionsPage() {
   };
   const toISO = (local: string) => local ? new Date(local).toISOString() : "";
 
+  const formatLocalDateTime = (date: Date) => {
+    const pad = (num: number) => num.toString().padStart(2, "0");
+    const yyyy = date.getFullYear();
+    const MM = pad(date.getMonth() + 1);
+    const dd = pad(date.getDate());
+    const hh = pad(date.getHours());
+    const mm = pad(date.getMinutes());
+    return `${yyyy}-${MM}-${dd}T${hh}:${mm}`;
+  };
+
+  const adjustDateTime = (currentVal: string, minutes: number) => {
+    if (!currentVal) return formatLocalDateTime(new Date());
+    const d = new Date(currentVal);
+    if (isNaN(d.getTime())) return formatLocalDateTime(new Date());
+    d.setMinutes(d.getMinutes() + minutes);
+    return formatLocalDateTime(d);
+  };
+
   // ── Sync ──────────────────────────────────────────────────────────────────
-  async function syncAll() {
+  const syncAll = React.useCallback(async () => {
     setLoading(true);
     try {
       const [huntRes, learnRes, targetsRes, topicsRes] = await Promise.all([
@@ -178,9 +196,9 @@ export default function SessionsPage() {
     } finally {
       setLoading(false);
     }
-  }
+  }, [selectedTarget, selectedTopic]);
 
-  React.useEffect(() => { syncAll(); }, []);
+  React.useEffect(() => { syncAll(); }, [syncAll]);
 
   // ── Start session ─────────────────────────────────────────────────────────
   const handleStart = async (e: React.FormEvent) => {
@@ -470,17 +488,81 @@ export default function SessionsPage() {
           <div className="space-y-1.5">
             <label className="block text-[10px] text-zinc-500 uppercase">Start Time</label>
             <input type="datetime-local" value={editStart} onChange={(e) => setEditStart(e.target.value)}
-              className="w-full bg-black border border-border-subtle rounded-md text-xs px-3 py-2 text-zinc-300 focus:outline-none focus:border-accent-cyan font-mono h-9" required />
+              className={`w-full bg-black border border-border-subtle rounded-md text-xs px-3 py-2 text-zinc-300 focus:outline-none font-mono h-9 ${
+                editingSession?.module === "Learning" ? "focus:border-success-emerald" : "focus:border-accent-cyan"
+              }`} required />
+            <div className="flex gap-1.5 mt-1.5 flex-wrap">
+              <button
+                type="button"
+                onClick={() => setEditStart(adjustDateTime(editStart, -30))}
+                className={`px-2 py-1 rounded bg-zinc-900 border border-zinc-800 text-[10px] text-zinc-400 hover:text-white transition-colors cursor-pointer ${
+                  editingSession?.module === "Learning" ? "hover:border-success-emerald/40 hover:text-success-emerald" : "hover:border-accent-cyan/40 hover:text-accent-cyan"
+                }`}
+              >
+                -30m
+              </button>
+              <button
+                type="button"
+                onClick={() => setEditStart(formatLocalDateTime(new Date()))}
+                className={`px-2 py-1 rounded bg-zinc-900 border border-zinc-800 text-[10px] text-zinc-400 hover:text-white transition-colors cursor-pointer ${
+                  editingSession?.module === "Learning" ? "hover:border-success-emerald/40 hover:text-success-emerald" : "hover:border-accent-cyan/40 hover:text-accent-cyan"
+                }`}
+              >
+                Current Time
+              </button>
+              <button
+                type="button"
+                onClick={() => setEditStart(adjustDateTime(editStart, 30))}
+                className={`px-2 py-1 rounded bg-zinc-900 border border-zinc-800 text-[10px] text-zinc-400 hover:text-white transition-colors cursor-pointer ${
+                  editingSession?.module === "Learning" ? "hover:border-success-emerald/40 hover:text-success-emerald" : "hover:border-accent-cyan/40 hover:text-accent-cyan"
+                }`}
+              >
+                +30m
+              </button>
+            </div>
           </div>
           <div className="space-y-1.5">
             <label className="block text-[10px] text-zinc-500 uppercase">End Time</label>
             <input type="datetime-local" value={editEnd} onChange={(e) => setEditEnd(e.target.value)}
-              className="w-full bg-black border border-border-subtle rounded-md text-xs px-3 py-2 text-zinc-300 focus:outline-none focus:border-accent-cyan font-mono h-9" required />
+              className={`w-full bg-black border border-border-subtle rounded-md text-xs px-3 py-2 text-zinc-300 focus:outline-none font-mono h-9 ${
+                editingSession?.module === "Learning" ? "focus:border-success-emerald" : "focus:border-accent-cyan"
+              }`} required />
+            <div className="flex gap-1.5 mt-1.5 flex-wrap">
+              <button
+                type="button"
+                onClick={() => setEditEnd(adjustDateTime(editEnd, -30))}
+                className={`px-2 py-1 rounded bg-zinc-900 border border-zinc-800 text-[10px] text-zinc-400 hover:text-white transition-colors cursor-pointer ${
+                  editingSession?.module === "Learning" ? "hover:border-success-emerald/40 hover:text-success-emerald" : "hover:border-accent-cyan/40 hover:text-accent-cyan"
+                }`}
+              >
+                -30m
+              </button>
+              <button
+                type="button"
+                onClick={() => setEditEnd(formatLocalDateTime(new Date()))}
+                className={`px-2 py-1 rounded bg-zinc-900 border border-zinc-800 text-[10px] text-zinc-400 hover:text-white transition-colors cursor-pointer ${
+                  editingSession?.module === "Learning" ? "hover:border-success-emerald/40 hover:text-success-emerald" : "hover:border-accent-cyan/40 hover:text-accent-cyan"
+                }`}
+              >
+                Current Time
+              </button>
+              <button
+                type="button"
+                onClick={() => setEditEnd(adjustDateTime(editEnd, 30))}
+                className={`px-2 py-1 rounded bg-zinc-900 border border-zinc-800 text-[10px] text-zinc-400 hover:text-white transition-colors cursor-pointer ${
+                  editingSession?.module === "Learning" ? "hover:border-success-emerald/40 hover:text-success-emerald" : "hover:border-accent-cyan/40 hover:text-accent-cyan"
+                }`}
+              >
+                +30m
+              </button>
+            </div>
           </div>
           <div className="flex justify-end gap-2 pt-2">
             <Button type="button" variant="secondary" onClick={() => setIsEditOpen(false)}>Cancel</Button>
             <Button type="submit" variant="primary" isLoading={editLoading}
-              className="bg-accent-cyan text-black border-accent-cyan hover:opacity-90 font-bold">Save Changes</Button>
+              className={`border hover:opacity-90 font-bold text-black ${
+                editingSession?.module === "Learning" ? "bg-success-emerald border-success-emerald" : "bg-accent-cyan border-accent-cyan"
+              }`}>Save Changes</Button>
           </div>
         </form>
       </InlineModal>

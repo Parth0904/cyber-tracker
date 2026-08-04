@@ -2,15 +2,12 @@
 
 import * as React from "react";
 import { 
-  Activity, Clock, Layers, Target, BookOpen, AlertCircle, 
-  Award, TrendingUp, Calendar, ChevronUp, ChevronDown, CheckCircle2, Moon, AwardIcon
+  Activity, Clock, Target, BookOpen, 
+  Award, Calendar, ChevronUp, ChevronDown, CheckCircle2
 } from "lucide-react";
 import { Panel } from "@/components/ui/Panel";
-import { Button } from "@/components/ui/Button";
-import { Badge } from "@/components/ui/Badge";
 import { EmptyState } from "@/components/ui/EmptyState";
 import LineChart from "@/components/charts/LineChart";
-import BarChart from "@/components/charts/BarChart";
 
 type TargetRow = {
   targetId: string;
@@ -36,6 +33,7 @@ type HabitPoint = {
   sleepHours: number;
   bedTimeMinutes: number;
   wakeTimeMinutes: number;
+  mobileScreenTime: number;
   consistency: number;
   completionPercent: number;
 };
@@ -79,7 +77,7 @@ export default function AnalyticsPage() {
   const [targetSortOrder, setTargetSortOrder] = React.useState<"asc" | "desc">("desc");
 
   // Section E state: active habit filter for chart
-  const [activeHabit, setActiveHabit] = React.useState<"sleepHours" | "consistency" | "completionPercent" | "bedTimeMinutes" | "wakeTimeMinutes">("consistency");
+  const [activeHabit, setActiveHabit] = React.useState<"sleepHours" | "consistency" | "completionPercent" | "bedTimeMinutes" | "wakeTimeMinutes" | "mobileScreenTime">("consistency");
 
   const syncData = async () => {
     try {
@@ -156,9 +154,9 @@ export default function AnalyticsPage() {
   // Habit analytics chart mapping
   const habitChartData = habitAnalytics.map(h => {
     let val = h[activeHabit];
-    if (activeHabit === "bedTimeMinutes" || activeHabit === "wakeTimeMinutes") {
-      // Map minutes from midnight directly
-      val = Math.round((val / 60) * 10) / 10; // represent in fractional hours
+    if (activeHabit === "bedTimeMinutes" || activeHabit === "wakeTimeMinutes" || activeHabit === "mobileScreenTime") {
+      // Map minutes to fractional hours for display
+      val = Math.round((val / 60) * 10) / 10;
     }
     return {
       label: h.date.slice(5), // MM-DD
@@ -376,7 +374,7 @@ export default function AnalyticsPage() {
             <p className="text-[10px] font-mono text-zinc-600 leading-relaxed">// NO_TOPICS_STUDIED_YET</p>
           ) : (
             <div className="space-y-2.5 font-mono text-[11px]">
-              {learningInvestment.recentlyLearned.slice(0, 5).map((tp, idx) => (
+              {learningInvestment.recentlyLearned.slice(0, 5).map((tp) => (
                 <div key={tp.topicId} className="flex justify-between items-center bg-black/40 border border-border-subtle/40 p-2.5 rounded hover:border-accent-cyan/20 transition-all">
                   <span className="truncate uppercase max-w-[160px] text-zinc-200 font-bold">{tp.name}</span>
                   <span className="text-zinc-400 text-[10px]">
@@ -404,7 +402,8 @@ export default function AnalyticsPage() {
               { id: "completionPercent", label: "Completion %" },
               { id: "sleepHours", label: "Sleep" },
               { id: "bedTimeMinutes", label: "Bed Time" },
-              { id: "wakeTimeMinutes", label: "Wake Time" }
+              { id: "wakeTimeMinutes", label: "Wake Time" },
+              { id: "mobileScreenTime", label: "Screen Time" }
             ].map(habit => (
               <button
                 key={habit.id}
@@ -424,7 +423,7 @@ export default function AnalyticsPage() {
             <div className="h-44 border border-border-subtle/50 bg-black rounded-lg flex items-center justify-center font-mono text-[10px] text-zinc-600">// INDEXING_DAILY_HABIT_SERIES</div>
           )}
           
-          <div className="grid grid-cols-2 md:grid-cols-4 gap-4 text-center font-mono text-[11px] pt-2 border-t border-border-subtle/50">
+          <div className="grid grid-cols-2 md:grid-cols-5 gap-4 text-center font-mono text-[11px] pt-2 border-t border-border-subtle/50">
             <div>
               <span className="text-zinc-500 block text-[9px] uppercase">Mean Sleep Hours</span>
               <span className="text-white font-bold text-xs mt-1 block">
@@ -441,6 +440,12 @@ export default function AnalyticsPage() {
               <span className="text-zinc-500 block text-[9px] uppercase">Mean Wake Time</span>
               <span className="text-white font-bold text-xs mt-1 block">
                 {formatMinutesToTime(habitAnalytics.reduce((acc, h) => acc + h.wakeTimeMinutes, 0) / habitAnalytics.length)}
+              </span>
+            </div>
+            <div>
+              <span className="text-zinc-500 block text-[9px] uppercase">Mean Screen Time</span>
+              <span className="text-white font-bold text-xs mt-1 block">
+                {Math.round(habitAnalytics.reduce((acc, h) => acc + h.mobileScreenTime, 0) / habitAnalytics.length)}m
               </span>
             </div>
             <div>

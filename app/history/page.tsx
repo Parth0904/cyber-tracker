@@ -1,7 +1,7 @@
 "use client";
 
 import * as React from "react";
-import { History, LayoutGrid, FileText } from "lucide-react";
+import { History } from "lucide-react";
 import { Panel } from "@/components/ui/Panel";
 import { EmptyState } from "@/components/ui/EmptyState";
 import HistorySearch from "@/components/history/HistorySearch";

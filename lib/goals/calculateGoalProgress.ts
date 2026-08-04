@@ -1,4 +1,3 @@
-import { DailyGoals } from "./defaultGoals";
 import { GoalProgress } from "./types";
 
 export function calculateGoalProgress(

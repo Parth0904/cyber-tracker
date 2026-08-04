@@ -46,7 +46,6 @@ export default function DashboardConsoleHome() {
   const [loading, setLoading] = React.useState(true);
 
   const [selectedTarget, setSelectedTarget] = React.useState("");
-  const [activityType, setActivityType] = React.useState("Hunting");
   const [isStartingSession, setIsStartingSession] = React.useState(false);
   const [elapsed, setElapsed] = React.useState("00:00:00");
 
@@ -61,7 +60,7 @@ export default function DashboardConsoleHome() {
   const [recoveryLoading, setRecoveryLoading] = React.useState(false);
 
   // Time conversion helpers
-  const toDatetimeLocal = (isoString: string | null) => {
+  const toDatetimeLocal = (isoString?: string | null) => {
     if (!isoString) return "";
     const date = new Date(isoString);
     const tzOffset = date.getTimezoneOffset() * 60000;
@@ -73,7 +72,25 @@ export default function DashboardConsoleHome() {
     return new Date(localString).toISOString();
   };
 
-  async function syncDashboardData() {
+  const formatLocalDateTime = (date: Date) => {
+    const pad = (num: number) => num.toString().padStart(2, "0");
+    const yyyy = date.getFullYear();
+    const MM = pad(date.getMonth() + 1);
+    const dd = pad(date.getDate());
+    const hh = pad(date.getHours());
+    const mm = pad(date.getMinutes());
+    return `${yyyy}-${MM}-${dd}T${hh}:${mm}`;
+  };
+
+  const adjustDateTime = (currentVal: string, minutes: number) => {
+    if (!currentVal) return formatLocalDateTime(new Date());
+    const d = new Date(currentVal);
+    if (isNaN(d.getTime())) return formatLocalDateTime(new Date());
+    d.setMinutes(d.getMinutes() + minutes);
+    return formatLocalDateTime(d);
+  };
+
+  const syncDashboardData = React.useCallback(async () => {
     try {
       const res = await fetch("/api/dashboard");
       if (res.ok) {
@@ -101,7 +118,7 @@ export default function DashboardConsoleHome() {
     } finally {
       setLoading(false);
     }
-  }
+  }, [ignoredSessionId, selectedTarget]);
 
   React.useEffect(() => {
     syncDashboardData();
@@ -113,7 +130,7 @@ export default function DashboardConsoleHome() {
     return () => {
       window.removeEventListener("refresh-dashboard-data", handleRefresh);
     };
-  }, [ignoredSessionId]);
+  }, [syncDashboardData]);
 
   React.useEffect(() => {
     if (!data?.activeSession?.active || !data.activeSession.startedAt) return;
@@ -139,7 +156,7 @@ export default function DashboardConsoleHome() {
       const res = await fetch(`/api/targets/${selectedTarget}/session`, {
         method: "POST",
         headers: { "Content-Type": "application/json" },
-        body: JSON.stringify({ type: activityType, description: "" }),
+        body: JSON.stringify({ type: "Testing", description: "" }),
       });
       if (res.ok) {
         await syncDashboardData();
@@ -154,7 +171,10 @@ export default function DashboardConsoleHome() {
 
   const handleEndSession = async (sessionId: number) => {
     try {
-      const res = await fetch(`/api/sessions/${sessionId}/terminate`, {
+      const url = data?.activeSession?.module === "Learning"
+        ? `/api/learning/sessions/${sessionId}/terminate`
+        : `/api/sessions/${sessionId}/terminate`;
+      const res = await fetch(url, {
         method: "PATCH",
         headers: { "Content-Type": "application/json" },
       });
@@ -401,6 +421,29 @@ export default function DashboardConsoleHome() {
                     className="w-full bg-black border border-border-subtle rounded-md text-xs px-3 py-2 text-zinc-300 focus:outline-none focus:border-accent-cyan font-mono h-9"
                     required
                   />
+                  <div className="flex gap-1.5 mt-1.5 flex-wrap">
+                    <button
+                      type="button"
+                      onClick={() => setRecoveryStart(adjustDateTime(recoveryStart, -30))}
+                      className="px-2 py-1 rounded bg-zinc-900 border border-zinc-800 text-[10px] text-zinc-400 hover:text-accent-cyan hover:border-accent-cyan/40 transition-colors cursor-pointer"
+                    >
+                      -30m
+                    </button>
+                    <button
+                      type="button"
+                      onClick={() => setRecoveryStart(formatLocalDateTime(new Date()))}
+                      className="px-2 py-1 rounded bg-zinc-900 border border-zinc-800 text-[10px] text-zinc-400 hover:text-accent-cyan hover:border-accent-cyan/40 transition-colors cursor-pointer"
+                    >
+                      Current Time
+                    </button>
+                    <button
+                      type="button"
+                      onClick={() => setRecoveryStart(adjustDateTime(recoveryStart, 30))}
+                      className="px-2 py-1 rounded bg-zinc-900 border border-zinc-800 text-[10px] text-zinc-400 hover:text-accent-cyan hover:border-accent-cyan/40 transition-colors cursor-pointer"
+                    >
+                      +30m
+                    </button>
+                  </div>
                 </div>
 
                 <div className="space-y-1.5">
@@ -412,6 +455,29 @@ export default function DashboardConsoleHome() {
                     className="w-full bg-black border border-border-subtle rounded-md text-xs px-3 py-2 text-zinc-300 focus:outline-none focus:border-accent-cyan font-mono h-9"
                     required
                   />
+                  <div className="flex gap-1.5 mt-1.5 flex-wrap">
+                    <button
+                      type="button"
+                      onClick={() => setRecoveryEnd(adjustDateTime(recoveryEnd, -30))}
+                      className="px-2 py-1 rounded bg-zinc-900 border border-zinc-800 text-[10px] text-zinc-400 hover:text-accent-cyan hover:border-accent-cyan/40 transition-colors cursor-pointer"
+                    >
+                      -30m
+                    </button>
+                    <button
+                      type="button"
+                      onClick={() => setRecoveryEnd(formatLocalDateTime(new Date()))}
+                      className="px-2 py-1 rounded bg-zinc-900 border border-zinc-800 text-[10px] text-zinc-400 hover:text-accent-cyan hover:border-accent-cyan/40 transition-colors cursor-pointer"
+                    >
+                      Current Time
+                    </button>
+                    <button
+                      type="button"
+                      onClick={() => setRecoveryEnd(adjustDateTime(recoveryEnd, 30))}
+                      className="px-2 py-1 rounded bg-zinc-900 border border-zinc-800 text-[10px] text-zinc-400 hover:text-accent-cyan hover:border-accent-cyan/40 transition-colors cursor-pointer"
+                    >
+                      +30m
+                    </button>
+                  </div>
                 </div>
 
                 <div className="flex justify-end gap-2 pt-2">

@@ -3,9 +3,8 @@
 import * as React from "react";
 import { useParams, useRouter } from "next/navigation";
 import { 
-  Play, Plus, Clock, Terminal, History, Archive, Trash2, Edit2, AlertCircle, CheckCircle2, X
+  Play, Clock, History, Trash2, Edit2, AlertCircle
 } from "lucide-react";
-import { Panel } from "@/components/ui/Panel";
 import { Button } from "@/components/ui/Button";
 import { Badge } from "@/components/ui/Badge";
 import { EmptyState } from "@/components/ui/EmptyState";
@@ -84,7 +83,25 @@ export default function TargetDetailsWorkspace() {
     return new Date(localString).toISOString();
   };
 
-  const fetchWorkspaceData = async () => {
+  const formatLocalDateTime = (date: Date) => {
+    const pad = (num: number) => num.toString().padStart(2, "0");
+    const yyyy = date.getFullYear();
+    const MM = pad(date.getMonth() + 1);
+    const dd = pad(date.getDate());
+    const hh = pad(date.getHours());
+    const mm = pad(date.getMinutes());
+    return `${yyyy}-${MM}-${dd}T${hh}:${mm}`;
+  };
+
+  const adjustDateTime = (currentVal: string, minutes: number) => {
+    if (!currentVal) return formatLocalDateTime(new Date());
+    const d = new Date(currentVal);
+    if (isNaN(d.getTime())) return formatLocalDateTime(new Date());
+    d.setMinutes(d.getMinutes() + minutes);
+    return formatLocalDateTime(d);
+  };
+
+  const fetchWorkspaceData = React.useCallback(async () => {
     try {
       const res = await fetch(`/api/targets/${targetId}`);
       if (res.ok) {
@@ -97,9 +114,9 @@ export default function TargetDetailsWorkspace() {
     } finally {
       setLoading(false);
     }
-  };
+  }, [targetId]);
 
-  const checkActiveSession = async () => {
+  const checkActiveSession = React.useCallback(async () => {
     try {
       const res = await fetch("/api/sessions");
       if (res.ok) {
@@ -114,7 +131,7 @@ export default function TargetDetailsWorkspace() {
     } catch (err) {
       console.error("Failed checking active sessions status:", err);
     }
-  };
+  }, [targetId]);
 
   React.useEffect(() => {
     if (!targetId) return;
@@ -125,7 +142,7 @@ export default function TargetDetailsWorkspace() {
       checkActiveSession();
     }, 5000);
     return () => clearInterval(interval);
-  }, [targetId]);
+  }, [targetId, fetchWorkspaceData, checkActiveSession]);
 
   // Live Timer Effect
   React.useEffect(() => {
@@ -584,6 +601,29 @@ export default function TargetDetailsWorkspace() {
                 className="w-full bg-black border border-border-subtle rounded-md text-xs px-3 py-2 text-zinc-300 focus:outline-none focus:border-accent-cyan font-mono h-9"
                 required
               />
+              <div className="flex gap-1.5 mt-1.5 flex-wrap">
+                <button
+                  type="button"
+                  onClick={() => setEditSessionStart(adjustDateTime(editSessionStart, -30))}
+                  className="px-2 py-1 rounded bg-zinc-900 border border-zinc-800 text-[10px] text-zinc-400 hover:text-accent-cyan hover:border-accent-cyan/40 transition-colors cursor-pointer"
+                >
+                  -30m
+                </button>
+                <button
+                  type="button"
+                  onClick={() => setEditSessionStart(formatLocalDateTime(new Date()))}
+                  className="px-2 py-1 rounded bg-zinc-900 border border-zinc-800 text-[10px] text-zinc-400 hover:text-accent-cyan hover:border-accent-cyan/40 transition-colors cursor-pointer"
+                >
+                  Current Time
+                </button>
+                <button
+                  type="button"
+                  onClick={() => setEditSessionStart(adjustDateTime(editSessionStart, 30))}
+                  className="px-2 py-1 rounded bg-zinc-900 border border-zinc-800 text-[10px] text-zinc-400 hover:text-accent-cyan hover:border-accent-cyan/40 transition-colors cursor-pointer"
+                >
+                  +30m
+                </button>
+              </div>
             </div>
             
             <div className="space-y-1.5">
@@ -595,8 +635,31 @@ export default function TargetDetailsWorkspace() {
                 className="w-full bg-black border border-border-subtle rounded-md text-xs px-3 py-2 text-zinc-300 focus:outline-none focus:border-accent-cyan font-mono h-9"
                 required
               />
+              <div className="flex gap-1.5 mt-1.5 flex-wrap">
+                <button
+                  type="button"
+                  onClick={() => setEditSessionEnd(adjustDateTime(editSessionEnd, -30))}
+                  className="px-2 py-1 rounded bg-zinc-900 border border-zinc-800 text-[10px] text-zinc-400 hover:text-accent-cyan hover:border-accent-cyan/40 transition-colors cursor-pointer"
+                >
+                  -30m
+                </button>
+                <button
+                  type="button"
+                  onClick={() => setEditSessionEnd(formatLocalDateTime(new Date()))}
+                  className="px-2 py-1 rounded bg-zinc-900 border border-zinc-800 text-[10px] text-zinc-400 hover:text-accent-cyan hover:border-accent-cyan/40 transition-colors cursor-pointer"
+                >
+                  Current Time
+                </button>
+                <button
+                  type="button"
+                  onClick={() => setEditSessionEnd(adjustDateTime(editSessionEnd, 30))}
+                  className="px-2 py-1 rounded bg-zinc-900 border border-zinc-800 text-[10px] text-zinc-400 hover:text-accent-cyan hover:border-accent-cyan/40 transition-colors cursor-pointer"
+                >
+                  +30m
+                </button>
+              </div>
             </div>
-
+ 
             <div className="flex justify-end gap-2 pt-2">
               <Button type="button" variant="secondary" onClick={() => setIsEditSessionModalOpen(false)}>
                 Cancel
