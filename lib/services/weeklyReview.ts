@@ -13,6 +13,7 @@ import { getAllSessions } from "@/lib/repositories/targetSessions";
 import { getAllLearningSessions } from "@/lib/repositories/learning";
 import { getAllFindings } from "@/lib/repositories/targetFindings";
 import { getAllTargets } from "@/lib/repositories/targets";
+import { getAllActivities } from "@/lib/repositories/activities";
 import { getCorrelationDiagnostics } from "@/lib/services/correlationEngine";
 import { saveWeeklyReview } from "@/lib/repositories/weeklyReview";
 
@@ -169,12 +170,17 @@ function averageTimeOfStatus(times: string[]): string {
   return formatMinutesToTime(finalMin);
 }
 
-function calculateConsistencyForWeek(weekStart: Date, entries: any[], allSessions: any[]) {
-  let habitSum = 0;
+function calculateConsistencyForWeek(
+  weekStart: Date,
+  entries: any[],
+  targetSessions: any[],
+  learningSessions: any[],
+  activities: any[],
+  findings: any[]
+) {
+  let coreRecoverySum = 0;
   let workoutSum = 0;
-  let readingSum = 0;
-  let loggingSum = 0;
-  let sessionSum = 0;
+  let productiveSum = 0;
   
   for (let i = 0; i < 7; i++) {
     const d = new Date(weekStart);
@@ -183,38 +189,43 @@ function calculateConsistencyForWeek(weekStart: Date, entries: any[], allSession
     
     const entry = entries.find(e => e.date === dateStr);
     
-    const bedTimeSet = entry?.bed_time ? 1 : 0;
+    const sleepSet = entry?.bed_time ? 1 : 0;
     const wakeTimeSet = entry?.wake_time ? 1 : 0;
-    const workoutSet = entry?.workout ? 1 : 0;
     const readingSet = entry?.reading ? 1 : 0;
-    const logSet = entry?.notes && entry.notes.trim() !== "" ? 1 : 0;
+    const noScreenSet = (entry?.mobile_screen_time !== null && entry?.mobile_screen_time !== undefined) ? 1 : 0;
     
-    const completedHabits = bedTimeSet + wakeTimeSet + workoutSet + readingSet + logSet;
-    const habitRate = completedHabits / 5;
+    const coreRecoveryRate = (sleepSet + wakeTimeSet + readingSet + noScreenSet) / 4;
+    coreRecoverySum += coreRecoveryRate;
     
-    habitSum += habitRate;
+    const workoutSet = entry?.workout ? 1 : 0;
     workoutSum += workoutSet;
-    readingSum += readingSet;
-    loggingSum += logSet;
     
-    const hasSession = allSessions.some(
-      s => s.started_at && s.started_at.split("T")[0] === dateStr
+    // Productive session checks
+    const hasTargetSession = targetSessions.some(
+      (s) => s.started_at && s.started_at.split("T")[0] === dateStr
     );
-    sessionSum += hasSession ? 1 : 0;
+    const hasLearningSession = learningSessions.some(
+      (s) => s.started_at && s.started_at.split("T")[0] === dateStr
+    );
+    const hasActivity = activities.some(
+      (a) => a.date === dateStr && ["learning", "bug_report", "recon", "target", "finding"].includes(a.type)
+    );
+    const hasFinding = findings.some(
+      (f) => f.submitted_at && f.submitted_at.startsWith(dateStr)
+    );
+
+    const isProductiveDay = hasTargetSession || hasLearningSession || hasActivity || hasFinding ? 1 : 0;
+    productiveSum += isProductiveDay;
   }
   
-  const avgHabitRate = habitSum / 7;
+  const avgCoreRecoveryRate = coreRecoverySum / 7;
   const avgWorkoutRate = workoutSum / 7;
-  const avgReadingRate = readingSum / 7;
-  const avgLoggingRate = loggingSum / 7;
-  const avgSessionRate = sessionSum / 7;
+  const avgProductiveRate = productiveSum / 7;
   
   return Math.round(
-    (avgHabitRate * 0.4 +
+    (avgCoreRecoveryRate * 0.4 +
       avgWorkoutRate * 0.15 +
-      avgReadingRate * 0.15 +
-      avgLoggingRate * 0.15 +
-      avgSessionRate * 0.15) *
+      avgProductiveRate * 0.45) *
       100
   );
 }
@@ -242,12 +253,14 @@ export async function generateWeeklyReviewReport(year: number, week: number): Pr
     allLearningSessions,
     allFindings,
     allTargets,
+    allActivities
   ] = await Promise.all([
     getAllDailyEntries(),
     getAllSessions(),
     getAllLearningSessions(),
     getAllFindings(),
     getAllTargets(),
+    getAllActivities()
   ]);
 
   // 2. Filter this week data
@@ -255,20 +268,12 @@ export async function generateWeeklyReviewReport(year: number, week: number): Pr
   const thisWeekTargetSessions = allTargetSessions.filter(s => s.started_at && s.started_at.split("T")[0] >= startStr && s.started_at.split("T")[0] <= endStr);
   const thisWeekLearningSessions = allLearningSessions.filter(s => s.started_at && s.started_at.split("T")[0] >= startStr && s.started_at.split("T")[0] <= endStr);
   const thisWeekFindings = allFindings.filter(f => f.submitted_at && f.submitted_at >= startStr && f.submitted_at <= endStr);
-  const thisWeekAllSessionsCombined = [
-    ...thisWeekTargetSessions.map(s => ({ started_at: s.started_at })),
-    ...thisWeekLearningSessions.map(s => ({ started_at: s.started_at })),
-  ];
 
   // 3. Filter previous week data
   const prevWeekEntries = allEntries.filter(e => e.date >= prevStartStr && e.date <= prevEndStr);
   const prevWeekTargetSessions = allTargetSessions.filter(s => s.started_at && s.started_at.split("T")[0] >= prevStartStr && s.started_at.split("T")[0] <= prevEndStr);
   const prevWeekLearningSessions = allLearningSessions.filter(s => s.started_at && s.started_at.split("T")[0] >= prevStartStr && s.started_at.split("T")[0] <= prevEndStr);
   const prevWeekFindings = allFindings.filter(f => f.submitted_at && f.submitted_at >= prevStartStr && f.submitted_at <= prevEndStr);
-  const prevWeekAllSessionsCombined = [
-    ...prevWeekTargetSessions.map(s => ({ started_at: s.started_at })),
-    ...prevWeekLearningSessions.map(s => ({ started_at: s.started_at })),
-  ];
 
   // 4. Filter 30-day baseline data
   const entries30d = allEntries.filter(e => e.date >= start30dStr && e.date <= end30dStr);
@@ -289,14 +294,14 @@ export async function generateWeeklyReviewReport(year: number, week: number): Pr
   const reportsSubmitted = thisWeekFindings.length;
   const validReports = thisWeekFindings.filter(f => f.status === "Valid").length;
 
-  const consistencyScore = calculateConsistencyForWeek(start, thisWeekEntries, thisWeekAllSessionsCombined);
+  const consistencyScore = calculateConsistencyForWeek(start, allEntries, allTargetSessions, allLearningSessions, allActivities, allFindings);
 
   // ================= PREVIOUS WEEK VALUES =================
   const prevHuntingHours = prevWeekTargetSessions.reduce((acc, s) => acc + (s.duration || 0), 0) / 60;
   const prevLearningHours = prevWeekLearningSessions.reduce((acc, s) => acc + (s.duration || 0), 0) / 60;
   const prevReportsSubmitted = prevWeekFindings.length;
   const prevValidReports = prevWeekFindings.filter(f => f.status === "Valid").length;
-  const prevConsistency = calculateConsistencyForWeek(prevStart, prevWeekEntries, prevWeekAllSessionsCombined);
+  const prevConsistency = calculateConsistencyForWeek(prevStart, allEntries, allTargetSessions, allLearningSessions, allActivities, allFindings);
 
   // ================= 30-DAY AVERAGE BASELINE (SCALED WEEKLY) =================
   const huntingHours30d = targetSessions30d.reduce((acc, s) => acc + (s.duration || 0), 0) / 60;
@@ -309,17 +314,11 @@ export async function generateWeeklyReviewReport(year: number, week: number): Pr
   const avgReportsWeekly30d = (reports30d / 30) * 7;
   const avgValidWeekly30d = (valid30d / 30) * 7;
 
-  // Consistency average 30d
-  const allSessionsCombined = [
-    ...allTargetSessions.map(s => ({ started_at: s.started_at })),
-    ...allLearningSessions.map(s => ({ started_at: s.started_at })),
-  ];
-
   let sumDailyConsistency30d = 0;
   for (let i = 0; i < 30; i++) {
     const d = new Date(start30d);
     d.setDate(d.getDate() + i);
-    const score = calculateConsistencyForWeek(d, allEntries, allSessionsCombined);
+    const score = calculateConsistencyForWeek(d, allEntries, allTargetSessions, allLearningSessions, allActivities, allFindings);
     sumDailyConsistency30d += score;
   }
   const avgConsistency30d = Math.round(sumDailyConsistency30d / 30);
@@ -610,8 +609,7 @@ export async function generateWeeklyReviewReport(year: number, week: number): Pr
   }
 
   if (recommendations.length === 0) {
-    recommendations.push("Establish regular bedtime schedules to structure morning operations.");
-    recommendations.push("Focus on logging reconnaissance data explicitly in daily notes.");
+    recommendations.push("More data is required to generate tailored operational recommendations.");
   }
 
   // ================= SECTION 8: ACHIEVEMENTS =================
@@ -672,11 +670,7 @@ export async function generateWeeklyReviewReport(year: number, week: number): Pr
   }
 
   const weeksList = Object.values(weeksMap).map(wk => {
-    const wkAllSessions = [
-      ...allTargetSessions.filter(s => s.started_at && s.started_at.split("T")[0] >= wk.start.toISOString().split("T")[0] && s.started_at.split("T")[0] <= endStr),
-      ...allLearningSessions.filter(s => s.started_at && s.started_at.split("T")[0] >= wk.start.toISOString().split("T")[0] && s.started_at.split("T")[0] <= endStr),
-    ];
-    const score = calculateConsistencyForWeek(wk.start, wk.entries, wkAllSessions);
+    const score = calculateConsistencyForWeek(wk.start, allEntries, allTargetSessions, allLearningSessions, allActivities, allFindings);
     return { ...wk, consistencyScore: score };
   });
 
@@ -712,7 +706,7 @@ export async function generateWeeklyReviewReport(year: number, week: number): Pr
   }
 
   if (achievements.length === 0) {
-    achievements.push("No new performance benchmarks exceeded this week. Maintain current operations.");
+    achievements.push("More data is required to establish weekly achievement benchmarks.");
   }
 
   // ================= SECTION 10: NEXT WEEK SNAPSHOT =================

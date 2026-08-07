@@ -13,9 +13,10 @@ import {
   LogOut,
   Mail,
 } from "lucide-react";
-import { signOut } from "next-auth/react";
+import { useRouter } from "next/navigation";
 
 export default function SettingsPage() {
+  const router = useRouter();
   const [exportLoading, setExportLoading] = useState<string | null>(null);
   const [backupLoading, setBackupLoading] = useState(false);
   const [backupResult, setBackupResult] = useState<any>(null);
@@ -32,7 +33,6 @@ export default function SettingsPage() {
   const [parentConfigLoading, setParentConfigLoading] = useState(true);
   const [saveLoading, setSaveLoading] = useState(false);
   const [testLoading, setTestLoading] = useState(false);
-  const [testEmailLoading, setTestEmailLoading] = useState(false);
   const [saveSuccess, setSaveSuccess] = useState(false);
   const [testResult, setTestResult] = useState<string | null>(null);
 
@@ -102,31 +102,6 @@ export default function SettingsPage() {
     }
   }
 
-  async function handleSendTestEmail() {
-    setTestEmailLoading(true);
-    setTestResult(null);
-    try {
-      await fetch("/api/settings/parent-report", {
-        method: "POST",
-        headers: { "Content-Type": "application/json" },
-        body: JSON.stringify(parentConfig),
-      });
-
-      const res = await fetch("/api/settings/parent-report/test-email", {
-        method: "POST",
-      });
-      const data = await res.json();
-      if (res.ok) {
-        setTestResult("Test email sent successfully. Check your configured inbox.");
-      } else {
-        setTestResult(`Error: ${data.error || "Failed to send test email."}`);
-      }
-    } catch (err: any) {
-      setTestResult(`Error: ${err.message || "Failed to initiate test email dispatch."}`);
-    } finally {
-      setTestEmailLoading(false);
-    }
-  }
 
   async function handleExport(format: "json" | "csv") {
     setExportLoading(format);
@@ -191,11 +166,19 @@ export default function SettingsPage() {
         </div>
         <div className="section-body">
           <p className="section-description">
-            Signed in as the system administrator. Session secured via Auth.js.
+            Signed in as the system administrator. Session secured.
           </p>
           <button
             className="settings-btn danger"
-            onClick={() => signOut({ callbackUrl: "/login" })}
+            onClick={async () => {
+              try {
+                await fetch("/api/auth/logout", { method: "POST" });
+                router.push("/login");
+                router.refresh();
+              } catch (err) {
+                console.error("Sign out failed", err);
+              }
+            }}
           >
             <LogOut size={16} />
             Sign Out
@@ -331,14 +314,14 @@ export default function SettingsPage() {
                     </div>
 
                     <div className="form-group">
-                      <label>Delivery Method</label>
-                      <select
-                        value={parentConfig.delivery_method}
-                        onChange={(e) => setParentConfig({ ...parentConfig, delivery_method: e.target.value })}
-                      >
-                        <option value="Email">Email Dispatcher</option>
-                        <option value="Telegram">Telegram Bot API</option>
-                      </select>
+                      <label>Parent's Email Address</label>
+                      <input
+                        type="email"
+                        placeholder="e.g. parent@example.com"
+                        value={parentConfig.email_address}
+                        onChange={(e) => setParentConfig({ ...parentConfig, email_address: e.target.value })}
+                        required
+                      />
                     </div>
                   </div>
 
@@ -366,30 +349,6 @@ export default function SettingsPage() {
                       />
                     </div>
                   </div>
-
-                  {parentConfig.delivery_method === "Email" ? (
-                    <div className="form-group">
-                      <label>Parent's Email Address</label>
-                      <input
-                        type="email"
-                        placeholder="e.g. parent@example.com"
-                        value={parentConfig.email_address}
-                        onChange={(e) => setParentConfig({ ...parentConfig, email_address: e.target.value })}
-                        required
-                      />
-                    </div>
-                  ) : (
-                    <div className="form-group">
-                      <label>Telegram Chat ID</label>
-                      <input
-                        type="text"
-                        placeholder="e.g. 123456789"
-                        value={parentConfig.telegram_chat_id}
-                        onChange={(e) => setParentConfig({ ...parentConfig, telegram_chat_id: e.target.value })}
-                        required
-                      />
-                    </div>
-                  )}
                 </div>
               )}
 
@@ -404,27 +363,15 @@ export default function SettingsPage() {
                 </button>
 
                 {parentConfig.enabled === 1 && (
-                  <>
-                    <button
-                      type="button"
-                      onClick={handleTestParentReport}
-                      className="settings-btn secondary"
-                      disabled={testLoading || testEmailLoading}
-                    >
-                      {testLoading ? <Loader2 size={16} className="spin" /> : <FileText size={16} />}
-                      {testLoading ? "Dispatching..." : "Send Test Report"}
-                    </button>
-
-                    <button
-                      type="button"
-                      onClick={handleSendTestEmail}
-                      className="settings-btn secondary"
-                      disabled={testLoading || testEmailLoading}
-                    >
-                      {testEmailLoading ? <Loader2 size={16} className="spin" /> : <Mail size={16} />}
-                      {testEmailLoading ? "Sending Email..." : "Send Test Email"}
-                    </button>
-                  </>
+                  <button
+                    type="button"
+                    onClick={handleTestParentReport}
+                    className="settings-btn secondary"
+                    disabled={testLoading}
+                  >
+                    {testLoading ? <Loader2 size={16} className="spin" /> : <FileText size={16} />}
+                    {testLoading ? "Dispatching..." : "Send Test Report"}
+                  </button>
                 )}
               </div>
 

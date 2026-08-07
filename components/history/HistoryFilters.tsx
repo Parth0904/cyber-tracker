@@ -12,10 +12,12 @@ type FilterProps = {
 
 export default function HistoryFilters({ currentCategory, onCategoryChange, onClearAll }: FilterProps) {
   const categories = [
-    { id: "all", label: "All Operations" },
-    { id: "target", label: "Target Logs" },
-    { id: "habit", label: "Habit Tracker" },
-    { id: "system", label: "System Audits" },
+    { id: "all", label: "All Days" },
+    { id: "Exceptional", label: "Exceptional" },
+    { id: "Above Average", label: "Above Average" },
+    { id: "Average", label: "Average" },
+    { id: "Below Average", label: "Below Average" },
+    { id: "Recovery Day", label: "Recovery Day" },
   ];
 
   return (

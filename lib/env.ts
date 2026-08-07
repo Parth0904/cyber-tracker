@@ -1,5 +1,5 @@
 // Startup environment validation utility
-const requiredKeys = ["AUTH_SECRET", "AUTH_USERNAME", "AUTH_PASSWORD"];
+const requiredKeys = ["AUTH_SECRET", "AUTH_PASSWORD"];
 
 // DATABASE_URL is strictly required when deploying to Vercel in production
 if (process.env.NODE_ENV === "production" && process.env.VERCEL === "1") {
@@ -32,7 +32,6 @@ Please define them in your environment or .env file and restart.
 
 export const env = {
   authSecret: process.env.AUTH_SECRET!,
-  authUsername: process.env.AUTH_USERNAME!,
   authPassword: process.env.AUTH_PASSWORD!,
   databaseUrl: process.env.DATABASE_URL,
 };

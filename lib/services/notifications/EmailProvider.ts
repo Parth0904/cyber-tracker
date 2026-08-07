@@ -12,31 +12,10 @@ export class EmailProvider implements NotificationProvider {
         Green: "🟢",
         Amber: "🟡",
         Red: "🔴",
-      }[reportData.consistencyState];
+      }[reportData.overallStatusColor];
 
-      const emailSubject = `${signalEmoji} Cyber Tracker Weekly Report – ${reportData.consistencyState}`;
-      const emailPreview = `Consistency: ${reportData.consistencyScore}/100 • Hunting: ${reportData.hunting.current.toFixed(1)}h • Learning: ${reportData.learning.current.toFixed(1)}h`;
-
-      const formatDiff = (curr: number, prev: number, suffix: string = "") => {
-        const diff = curr - prev;
-        const sign = diff > 0 ? "+" : "";
-        return `${sign}${diff.toFixed(1)}${suffix} (${curr.toFixed(1)}${suffix} vs ${prev.toFixed(1)}${suffix})`;
-      };
-
-      const formatDaysDiff = (curr: number, prev: number) => {
-        const diff = curr - prev;
-        const sign = diff > 0 ? "+" : "";
-        const dayStr = Math.abs(diff) === 1 ? "day" : "days";
-        const currDayStr = curr === 1 ? "day" : "days";
-        const prevDayStr = prev === 1 ? "day" : "days";
-        return `${sign}${diff} ${dayStr} (${curr} ${currDayStr} vs ${prev} ${prevDayStr})`;
-      };
-
-      const formatScreenTimeDiff = (curr: number, prev: number) => {
-        const diff = curr - prev;
-        const sign = diff > 0 ? "+" : "";
-        return `${sign}${diff}m (${curr}m vs ${prev}m)`;
-      };
+      const emailSubject = `${signalEmoji} Weekly Performance Digest - ${reportData.overallStatus}`;
+      const emailPreview = `Consistency: ${reportData.consistencyScore}% • Status: ${reportData.overallStatus} • Parth's weekly performance snapshot.`;
 
       const now = new Date();
       const yyyy = now.getFullYear();
@@ -45,46 +24,35 @@ export class EmailProvider implements NotificationProvider {
       const dateStr = `${yyyy}-${mm}-${dd}`;
       const timeStr = now.toLocaleTimeString("en-US", { hour12: false }).substring(0, 5);
 
-      const emailBody = `Week: Week ${reportData.weekNumber}
-Status: ${signalEmoji} ${reportData.consistencyState}
-Consistency Score: ${reportData.consistencyScore}/100
+      const emailBody = `Weekly Performance Digest - Week ${reportData.weekNumber}
+Status: ${reportData.overallStatus} (${signalEmoji})
+Explanation: ${reportData.overallStatusExplanation}
 
---------------------
+Consistency: ${reportData.consistencyScore}% (${reportData.productiveDaysCount} of 7 productive days)
 
-Work
+Activity Summary:
+- Learning Sessions Completed: ${reportData.learningBlocksCompleted}
+- Security Report Study Sessions Completed: ${reportData.bugReportStudyBlocks}
+- Research Sessions Completed: ${reportData.reconSessions}
+- Systems Evaluated: ${reportData.targetsTested}
+- Security Reports Submitted: ${reportData.reportsSubmitted}
+- Accepted Security Reports: ${reportData.validReports}
 
-• Hunting Hours: ${reportData.hunting.current.toFixed(1)}h
-• Learning Hours: ${reportData.learning.current.toFixed(1)}h
-• Reports Submitted: ${reportData.reportsSubmitted}
-• Valid Reports: ${reportData.validReports}
+Healthy Habits:
+- Average Sleep: ${reportData.averageSleep.toFixed(1)} hours/night
+- Workout Days: ${reportData.workoutDays} days
+- Reading Before Bed: ${reportData.readingBeforeBedDays} days
 
---------------------
+Weekly Progress:
+${reportData.progressSummary}
 
-Habits
+Biggest Achievement:
+${reportData.biggestAchievement}
 
-• Workout: ${reportData.workout.current} days completed
-• Reading: ${reportData.reading.current} days completed
-• Average Sleep: ${reportData.sleep.current.toFixed(1)} hours
-• Average Mobile Screen Time: ${reportData.screenTime.current} minutes
-• Daily Logs Completed: ${reportData.dailyLogsCompleted} days completed
+Focus for Next Week:
+${reportData.focusNextWeek}
 
---------------------
-
-Compared to Last Week
-
-• Hunting: ${formatDiff(reportData.hunting.current, reportData.hunting.previous, "h")}
-• Learning: ${formatDiff(reportData.learning.current, reportData.learning.previous, "h")}
-• Reading: ${formatDaysDiff(reportData.reading.current, reportData.reading.previous)}
-• Workout: ${formatDaysDiff(reportData.workout.current, reportData.workout.previous)}
-• Sleep: ${formatDiff(reportData.sleep.current, reportData.sleep.previous, "h")}
-• Mobile Screen Time: ${formatScreenTimeDiff(reportData.screenTime.current, reportData.screenTime.previous)}
-
---------------------
-
-Generated
-
-${dateStr}
-${timeStr}`;
+Generated on ${dateStr} at ${timeStr}`;
 
       // Keep the console logging for development
       console.log("-----------------------------------------");
@@ -124,98 +92,183 @@ ${timeStr}`;
   <style>
     body {
       font-family: -apple-system, BlinkMacSystemFont, "Segoe UI", Roboto, Helvetica, Arial, sans-serif;
-      background-color: #0b0f19;
-      color: #f1f5f9;
+      background-color: #f8fafc;
+      color: #334155;
       margin: 0;
       padding: 24px;
     }
     .container {
       max-width: 600px;
       margin: 0 auto;
-      background-color: #111827;
-      border-radius: 12px;
-      border: 1px solid #1f2937;
+      background-color: #ffffff;
+      border-radius: 16px;
+      border: 1px solid #e2e8f0;
       padding: 32px;
-      box-shadow: 0 10px 15px -3px rgba(0, 0, 0, 0.3);
+      box-shadow: 0 4px 6px -1px rgba(0, 0, 0, 0.05), 0 2px 4px -1px rgba(0, 0, 0, 0.03);
     }
     .header {
-      border-bottom: 2px solid #1f2937;
-      padding-bottom: 20px;
+      border-bottom: 1px solid #e2e8f0;
+      padding-bottom: 24px;
       margin-bottom: 24px;
+      text-align: center;
     }
     .title {
-      font-size: 24px;
+      font-size: 22px;
       font-weight: 700;
-      color: #ffffff;
+      color: #0f172a;
       margin: 0;
     }
     .subtitle {
-      font-size: 14px;
-      color: #9ca3af;
-      margin-top: 4px;
+      font-size: 13px;
+      color: #64748b;
+      margin-top: 6px;
+      text-transform: uppercase;
+      letter-spacing: 0.05em;
     }
-    .status-badge {
-      display: inline-block;
-      padding: 6px 14px;
-      border-radius: 9999px;
-      font-size: 14px;
-      font-weight: 600;
-      margin-top: 12px;
+    .status-card {
+      margin-top: 18px;
+      padding: 16px;
+      border-radius: 12px;
+      font-weight: 500;
+      font-size: 15px;
+      text-align: left;
     }
     .status-Green {
-      background-color: rgba(16, 185, 129, 0.15);
-      color: #10b981;
-      border: 1px solid rgba(16, 185, 129, 0.3);
+      background-color: #f0fdf4;
+      color: #166534;
+      border: 1px solid #bbf7d0;
     }
     .status-Amber {
-      background-color: rgba(245, 158, 11, 0.15);
-      color: #f59e0b;
-      border: 1px solid rgba(245, 158, 11, 0.3);
+      background-color: #fffbeb;
+      color: #92400e;
+      border: 1px solid #fef3c7;
     }
     .status-Red {
-      background-color: rgba(239, 68, 68, 0.15);
-      color: #ef4444;
-      border: 1px solid rgba(239, 68, 68, 0.3);
+      background-color: #fef2f2;
+      color: #991b1b;
+      border: 1px solid #fee2e2;
+    }
+    .status-title {
+      font-weight: 700;
+      font-size: 16px;
+      margin: 0 0 6px 0;
+      display: flex;
+      align-items: center;
+      gap: 6px;
+    }
+    .status-desc {
+      font-size: 14px;
+      color: inherit;
+      opacity: 0.9;
+      margin: 0;
+    }
+    .grid-2 {
+      display: grid;
+      grid-template-columns: 1fr 1fr;
+      gap: 16px;
+      margin-bottom: 24px;
+    }
+    .card {
+      background-color: #f8fafc;
+      border: 1px solid #e2e8f0;
+      border-radius: 12px;
+      padding: 20px;
+    }
+    .card-title {
+      font-size: 13px;
+      font-weight: 600;
+      color: #64748b;
+      text-transform: uppercase;
+      letter-spacing: 0.05em;
+      margin: 0 0 10px 0;
+    }
+    .big-value {
+      font-size: 32px;
+      font-weight: 800;
+      color: #0f172a;
+      margin: 0;
+      line-height: 1;
+    }
+    .small-label {
+      font-size: 13px;
+      color: #475569;
+      margin-top: 4px;
+      margin-bottom: 0;
     }
     .section-title {
       font-size: 14px;
-      font-weight: 600;
-      color: #9ca3af;
+      font-weight: 700;
+      color: #0f172a;
       text-transform: uppercase;
       letter-spacing: 0.05em;
       margin-top: 28px;
       margin-bottom: 12px;
-      border-bottom: 1px solid #1f2937;
+      border-bottom: 1px solid #e2e8f0;
       padding-bottom: 6px;
     }
-    .metric-list {
+    .item-list {
       list-style: none;
       padding: 0;
       margin: 0;
     }
-    .metric-item {
+    .item-row {
       display: flex;
       justify-content: space-between;
-      padding: 8px 0;
-      border-bottom: 1px solid rgba(31, 41, 55, 0.5);
+      padding: 10px 0;
+      border-bottom: 1px solid #f1f5f9;
       font-size: 14px;
     }
-    .metric-item:last-child {
+    .item-row:last-child {
       border-bottom: none;
     }
-    .metric-label {
-      color: #9ca3af;
+    .item-label {
+      color: #475569;
     }
-    .metric-value {
+    .item-value {
       font-weight: 600;
-      color: #f3f4f6;
+      color: #0f172a;
+    }
+    .text-block {
+      background-color: #f8fafc;
+      border-left: 4px solid #6366f1;
+      border-radius: 0 8px 8px 0;
+      padding: 16px;
+      font-size: 14.5px;
+      line-height: 1.6;
+      color: #334155;
+      margin-bottom: 16px;
+    }
+    .achievement-block {
+      background-color: #fdf2f8;
+      border-left: 4px solid #ec4899;
+      border-radius: 0 8px 8px 0;
+      padding: 16px;
+      font-size: 14.5px;
+      line-height: 1.5;
+      color: #831843;
+      font-weight: 500;
+      margin-bottom: 16px;
+      display: flex;
+      align-items: center;
+      gap: 8px;
+    }
+    .focus-block {
+      background-color: #eff6ff;
+      border-left: 4px solid #3b82f6;
+      border-radius: 0 8px 8px 0;
+      padding: 16px;
+      font-size: 14.5px;
+      line-height: 1.5;
+      color: #1e3a8a;
+      font-weight: 500;
+      margin-bottom: 16px;
     }
     .footer {
-      margin-top: 32px;
+      margin-top: 36px;
       padding-top: 16px;
-      border-top: 1px solid #1f2937;
+      border-top: 1px solid #e2e8f0;
       font-size: 12px;
-      color: #4b5563;
+      color: #94a3b8;
       text-align: center;
     }
   </style>
@@ -228,86 +281,87 @@ ${timeStr}`;
   
   <div class="container">
     <div class="header">
-      <h1 class="title">Weekly Performance Report</h1>
+      <h1 class="title">Parth's Weekly Progress Report</h1>
       <div class="subtitle">Week ${reportData.weekNumber} &bull; Cyber Tracker</div>
-      <div class="status-badge status-${reportData.consistencyState}">
-        ${signalEmoji} Consistency Status: ${reportData.consistencyState} (Score: ${reportData.consistencyScore}/100)
+      
+      <div class="status-card status-${reportData.overallStatusColor}">
+        <div class="status-title">${signalEmoji} ${reportData.overallStatus}</div>
+        <p class="status-desc">${reportData.overallStatusExplanation}</p>
       </div>
     </div>
     
-    <div class="section-title">Work Metrics</div>
-    <ul class="metric-list">
-      <li class="metric-item">
-        <span class="metric-label">Hunting Hours</span>
-        <span class="metric-value">${reportData.hunting.current.toFixed(1)}h</span>
+    <div class="grid-2">
+      <div class="card">
+        <h3 class="card-title">Consistency</h3>
+        <p class="big-value">${reportData.consistencyScore}%</p>
+        <p class="small-label">${reportData.productiveDaysCount} of 7 productive days</p>
+      </div>
+      <div class="card">
+        <h3 class="card-title">Sleep Quality</h3>
+        <p class="big-value">${reportData.averageSleep.toFixed(1)}h</p>
+        <p class="small-label">Average hours per night</p>
+      </div>
+    </div>
+
+    <div class="section-title">Weekly Activity Summary</div>
+    <ul class="item-list">
+      <li class="item-row">
+        <span class="item-label">Learning Sessions Completed</span>
+        <span class="item-value">${reportData.learningBlocksCompleted}</span>
       </li>
-      <li class="metric-item">
-        <span class="metric-label">Learning Hours</span>
-        <span class="metric-value">${reportData.learning.current.toFixed(1)}h</span>
+      <li class="item-row">
+        <span class="item-label">Security Report Study Sessions Completed</span>
+        <span class="item-value">${reportData.bugReportStudyBlocks}</span>
       </li>
-      <li class="metric-item">
-        <span class="metric-label">Reports Submitted</span>
-        <span class="metric-value">${reportData.reportsSubmitted}</span>
+      <li class="item-row">
+        <span class="item-label">Research Sessions Completed</span>
+        <span class="item-value">${reportData.reconSessions}</span>
       </li>
-      <li class="metric-item">
-        <span class="metric-label">Valid Reports</span>
-        <span class="metric-value">${reportData.validReports}</span>
+      <li class="item-row">
+        <span class="item-label">Systems Evaluated</span>
+        <span class="item-value">${reportData.targetsTested}</span>
+      </li>
+      <li class="item-row">
+        <span class="item-label">Security Reports Submitted</span>
+        <span class="item-value">${reportData.reportsSubmitted}</span>
+      </li>
+      ${reportData.validReports > 0 ? `
+      <li class="item-row">
+        <span class="item-label">Accepted Security Reports</span>
+        <span class="item-value" style="color: #16a34a;">${reportData.validReports}</span>
+      </li>
+      ` : ''}
+    </ul>
+
+    <div class="section-title">Healthy Habits</div>
+    <ul class="item-list">
+      <li class="item-row">
+        <span class="item-label">Workout Days Completed</span>
+        <span class="item-value">${reportData.workoutDays} of 7 days</span>
+      </li>
+      <li class="item-row">
+        <span class="item-label">Reading Before Bed</span>
+        <span class="item-value">${reportData.readingBeforeBedDays} of 7 days</span>
       </li>
     </ul>
 
-    <div class="section-title">Habits</div>
-    <ul class="metric-list">
-      <li class="metric-item">
-        <span class="metric-label">Workout Completed</span>
-        <span class="metric-value">${reportData.workout.current} days</span>
-      </li>
-      <li class="metric-item">
-        <span class="metric-label">Reading Completed</span>
-        <span class="metric-value">${reportData.reading.current} days</span>
-      </li>
-      <li class="metric-item">
-        <span class="metric-label">Average Sleep</span>
-        <span class="metric-value">${reportData.sleep.current.toFixed(1)} hours</span>
-      </li>
-      <li class="metric-item">
-        <span class="metric-label">Average Mobile Screen Time</span>
-        <span class="metric-value">${reportData.screenTime.current} minutes</span>
-      </li>
-      <li class="metric-item">
-        <span class="metric-label">Daily Logs Completed</span>
-        <span class="metric-value">${reportData.dailyLogsCompleted} days</span>
-      </li>
-    </ul>
+    <div class="section-title">Weekly Progress Summary</div>
+    <div class="text-block">
+      ${reportData.progressSummary}
+    </div>
 
-    <div class="section-title">Weekly Comparison</div>
-    <ul class="metric-list">
-      <li class="metric-item">
-        <span class="metric-label">Hunting Difference</span>
-        <span class="metric-value">${formatDiff(reportData.hunting.current, reportData.hunting.previous, "h")}</span>
-      </li>
-      <li class="metric-item">
-        <span class="metric-label">Learning Difference</span>
-        <span class="metric-value">${formatDiff(reportData.learning.current, reportData.learning.previous, "h")}</span>
-      </li>
-      <li class="metric-item">
-        <span class="metric-label">Reading Difference</span>
-        <span class="metric-value">${formatDaysDiff(reportData.reading.current, reportData.reading.previous)}</span>
-      </li>
-      <li class="metric-item">
-        <span class="metric-label">Workout Difference</span>
-        <span class="metric-value">${formatDaysDiff(reportData.workout.current, reportData.workout.previous)}</span>
-      </li>
-      <li class="metric-item">
-        <span class="metric-label">Sleep Difference</span>
-        <span class="metric-value">${formatDiff(reportData.sleep.current, reportData.sleep.previous, "h")}</span>
-      </li>
-      <li class="metric-item">
-        <span class="metric-label">Mobile Screen Time Difference</span>
-        <span class="metric-value">${formatScreenTimeDiff(reportData.screenTime.current, reportData.screenTime.previous)}</span>
-      </li>
-    </ul>
+    <div class="section-title">Biggest Achievement</div>
+    <div class="achievement-block">
+      ✨ <strong>${reportData.biggestAchievement}</strong>
+    </div>
+
+    <div class="section-title">Focus for Next Week</div>
+    <div class="focus-block">
+      🎯 ${reportData.focusNextWeek}
+    </div>
 
     <div class="footer">
+      This is a secure, automatically generated weekly digest.<br>
       Generated on ${dateStr} at ${timeStr}<br>
       Cyber Tracker Operations Engine
     </div>

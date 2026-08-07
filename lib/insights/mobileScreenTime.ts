@@ -1,4 +1,3 @@
-/* eslint-disable @typescript-eslint/no-unused-vars */
 import { Insight } from "./index";
 import { analyzeBuckets, getStrength } from "./analyzer";
 

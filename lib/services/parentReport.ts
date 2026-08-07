@@ -1,10 +1,13 @@
-import { getISOWeek, getISOWeekYear, subWeeks, startOfISOWeek, endOfISOWeek } from "date-fns";
+import { getISOWeek, getISOWeekYear, endOfISOWeek } from "date-fns";
 import { getParentReportConfig, getPendingReportLogs, getReportLog, createReportLog, updateReportLog } from "@/lib/repositories/parentReport";
 import { generateWeeklyReviewReport, getDatesForWeek } from "@/lib/services/weeklyReview";
 import { getWeeklyReview } from "@/lib/repositories/weeklyReview";
 import { getAllDailyEntries } from "@/lib/repositories/dailyEntries";
+import { getAllSessions } from "@/lib/repositories/targetSessions";
+import { getAllLearningSessions } from "@/lib/repositories/learning";
+import { getAllFindings } from "@/lib/repositories/targetFindings";
+import { getAllActivities } from "@/lib/repositories/activities";
 import { EmailProvider } from "./notifications/EmailProvider";
-import { TelegramProvider } from "./notifications/TelegramProvider";
 import { NotificationProvider, ParentReportData } from "./notifications/NotificationProvider";
 
 export async function sendPendingReports(): Promise<void> {
@@ -14,103 +17,18 @@ export async function sendPendingReports(): Promise<void> {
   const pending = await getPendingReportLogs();
   if (pending.length === 0) return;
 
-  // Resolve notification provider
-  let provider: NotificationProvider;
-  let recipient = "";
-
-  if (config.delivery_method === "Email") {
-    provider = new EmailProvider();
-    recipient = config.email_address;
-  } else if (config.delivery_method === "Telegram") {
-    provider = new TelegramProvider();
-    recipient = config.telegram_chat_id;
-  } else {
-    console.warn(`Unsupported parent report delivery method: ${config.delivery_method}`);
-    return;
-  }
+  const provider = new EmailProvider();
+  const recipient = config.email_address;
 
   for (const log of pending) {
     try {
-      // 1. Fetch weekly review (load cached report or generate on the fly)
-      const review = await getWeeklyReview(log.year, log.week_number);
-      let reportData: any;
-      if (review) {
-        reportData = JSON.parse(review.report_json);
-      } else {
-        reportData = await generateWeeklyReviewReport(log.year, log.week_number);
-      }
+      const payload = await compileReportPayload(log.year, log.week_number);
 
-      const consistencyState: "Green" | "Amber" | "Red" = 
-        reportData.executiveSummary.consistencyState === "green" ? "Green" :
-        reportData.executiveSummary.consistencyState === "amber" ? "Amber" : "Red";
-
-      // Calculate Daily Logs Completed and comparisons from daily entries
-      const { start, end } = getDatesForWeek(log.year, log.week_number);
-      const startStr = start.toISOString().split("T")[0];
-      const endStr = end.toISOString().split("T")[0];
-
-      const prevWeekDate = subWeeks(start, 1);
-      const prevStart = startOfISOWeek(prevWeekDate);
-      const prevEnd = endOfISOWeek(prevWeekDate);
-      const prevStartStr = prevStart.toISOString().split("T")[0];
-      const prevEndStr = prevEnd.toISOString().split("T")[0];
-
-      const allEntries = await getAllDailyEntries();
-      const thisWeekEntries = allEntries.filter(e => e.date >= startStr && e.date <= endStr);
-      const prevWeekEntries = allEntries.filter(e => e.date >= prevStartStr && e.date <= prevEndStr);
-
-      const dailyLogsCompleted = thisWeekEntries.filter(e => e.notes && e.notes.trim() !== "").length;
-
-      const workoutCount = reportData.habitReview.workoutCount;
-      const prevWorkoutCount = reportData.habitReview.workoutCount - reportData.habitReview.workoutCountDiffPrev;
-
-      const readingCount = reportData.habitReview.readingDays;
-      const prevReadingCount = reportData.habitReview.readingDays - reportData.habitReview.readingDaysDiffPrev;
-
-      const avgSleep = reportData.habitReview.avgSleepHours;
-      const prevAvgSleep = Math.round((reportData.habitReview.avgSleepHours - reportData.habitReview.avgSleepHoursDiffPrev) * 10) / 10;
-
-      const avgScreenTime = reportData.habitReview.avgMobileScreenTime;
-      const prevAvgScreenTime = reportData.habitReview.avgMobileScreenTime - reportData.habitReview.avgMobileScreenTimeDiffPrev;
-
-      const reportPayload: ParentReportData = {
-        weekNumber: reportData.weekNumber,
-        consistencyState,
-        consistencyScore: reportData.executiveSummary.consistencyScore,
-        reportsSubmitted: reportData.workSummary.reportsSubmitted,
-        validReports: reportData.workSummary.validReports,
-        dailyLogsCompleted,
-        hunting: {
-          current: reportData.workSummary.totalHuntingHours,
-          previous: reportData.comparison.huntingHours.prevWeekValue,
-        },
-        learning: {
-          current: reportData.workSummary.totalLearningHours,
-          previous: reportData.comparison.learningHours.prevWeekValue,
-        },
-        reading: {
-          current: readingCount,
-          previous: prevReadingCount,
-        },
-        workout: {
-          current: workoutCount,
-          previous: prevWorkoutCount,
-        },
-        sleep: {
-          current: avgSleep,
-          previous: prevAvgSleep,
-        },
-        screenTime: {
-          current: avgScreenTime,
-          previous: prevAvgScreenTime,
-        },
-      };
-
-      // 2. Deliver via provider
+      // Deliver via provider
       const dispatch = await provider.sendReport(
         config.parent_name || "Parent",
         recipient,
-        reportPayload
+        payload
       );
 
       if (dispatch.success) {
@@ -185,134 +103,270 @@ export async function checkAndQueueReport(): Promise<void> {
   await sendPendingReports();
 }
 
+async function compileReportPayload(targetYear: number, targetWeek: number): Promise<ParentReportData> {
+  let reportData: any;
+  try {
+    const review = await getWeeklyReview(targetYear, targetWeek);
+    if (review) {
+      reportData = JSON.parse(review.report_json);
+    } else {
+      reportData = await generateWeeklyReviewReport(targetYear, targetWeek);
+    }
+  } catch (err) {
+    console.error("Weekly review generation failed, compiling default fallback:", err);
+    // Fallback if compilation fails
+    reportData = {
+      weekNumber: targetWeek,
+      executiveSummary: { 
+        consistencyState: "red",
+        consistencyScore: 0,
+      },
+      workSummary: {
+        totalHuntingHours: 0,
+        totalLearningHours: 0,
+        reportsSubmitted: 0,
+        validReports: 0,
+      },
+      habitReview: {
+        workoutCount: 0,
+        workoutCountDiffPrev: 0,
+        readingDays: 0,
+        readingDaysDiffPrev: 0,
+        avgSleepHours: 0.0,
+        avgSleepHoursDiffPrev: 0.0,
+        avgMobileScreenTime: 0,
+        avgMobileScreenTimeDiffPrev: 0,
+      },
+    };
+  }
+
+  const { start, end } = getDatesForWeek(targetYear, targetWeek);
+  const startStr = start.toISOString().split("T")[0];
+  const endStr = end.toISOString().split("T")[0];
+
+  const prevWeekDate = new Date(start);
+  prevWeekDate.setDate(prevWeekDate.getDate() - 7);
+  const prevStartStr = prevWeekDate.toISOString().split("T")[0];
+  
+  const prevWeekEndDate = new Date(end);
+  prevWeekEndDate.setDate(prevWeekEndDate.getDate() - 7);
+  const prevEndStr = prevWeekEndDate.toISOString().split("T")[0];
+
+  const start30d = new Date(start);
+  start30d.setDate(start30d.getDate() - 30);
+  const start30dStr = start30d.toISOString().split("T")[0];
+
+  const end30d = new Date(start);
+  end30d.setDate(end30d.getDate() - 1);
+  const end30dStr = end30d.toISOString().split("T")[0];
+
+  // Fetch all raw data in parallel
+  const [
+    allEntries,
+    allTargetSessions,
+    allLearningSessions,
+    allFindings,
+    allActivities
+  ] = await Promise.all([
+    getAllDailyEntries(),
+    getAllSessions(),
+    getAllLearningSessions(),
+    getAllFindings(),
+    getAllActivities()
+  ]);
+
+  // Filter this week data
+  const thisWeekEntries = allEntries.filter(e => e.date >= startStr && e.date <= endStr);
+  const thisWeekTargetSessions = allTargetSessions.filter(s => s.started_at && s.started_at.split("T")[0] >= startStr && s.started_at.split("T")[0] <= endStr);
+  const thisWeekLearningSessions = allLearningSessions.filter(s => s.started_at && s.started_at.split("T")[0] >= startStr && s.started_at.split("T")[0] <= endStr);
+  const thisWeekFindings = allFindings.filter(f => f.submitted_at && f.submitted_at >= startStr && f.submitted_at <= endStr);
+  const thisWeekActivities = allActivities.filter(a => a.date >= startStr && a.date <= endStr);
+
+  // Filter 30-day baseline data for comparisons
+  const entries30d = allEntries.filter(e => e.date >= start30dStr && e.date <= end30dStr);
+  const targetSessions30d = allTargetSessions.filter(s => s.started_at && s.started_at.split("T")[0] >= start30dStr && s.started_at.split("T")[0] <= end30dStr);
+  const learningSessions30d = allLearningSessions.filter(s => s.started_at && s.started_at.split("T")[0] >= start30dStr && s.started_at.split("T")[0] <= end30dStr);
+  const findings30d = allFindings.filter(f => f.submitted_at && f.submitted_at >= start30dStr && f.submitted_at <= end30dStr);
+  const activities30d = allActivities.filter(a => a.date >= start30dStr && a.date <= end30dStr);
+
+  // Calculate activity counts
+  const learningBlocksCompleted = thisWeekLearningSessions.length + thisWeekActivities.filter(a => a.type === "learning").length;
+  const bugReportStudyBlocks = thisWeekActivities.filter(a => a.type === "bug_report").length;
+  const reconSessions = thisWeekTargetSessions.filter(s => s.type === "Recon").length + thisWeekActivities.filter(a => a.type === "recon").length;
+  const targetsTested = new Set(thisWeekTargetSessions.map(s => s.target_id)).size;
+  const reportsSubmitted = thisWeekFindings.length;
+  const validReports = thisWeekFindings.filter(f => f.status === "Valid").length;
+
+  // Habits
+  const avgSleep = reportData.habitReview?.avgSleepHours ?? 0.0;
+  const workoutDays = thisWeekEntries.filter(e => e.workout === 1).length;
+  const readingBeforeBedDays = thisWeekEntries.filter(e => e.reading === 1).length;
+
+  // Consistency and Status
+  const consistencyScore = reportData.executiveSummary?.consistencyScore ?? 0;
+  let overallStatusColor: "Green" | "Amber" | "Red" = "Amber";
+  let overallStatus: "Excellent Week" | "Good Week" | "Needs Improvement" = "Good Week";
+  let overallStatusExplanation = "";
+
+  if (consistencyScore >= 80) {
+    overallStatusColor = "Green";
+    overallStatus = "Excellent Week";
+    overallStatusExplanation = "Parth demonstrated highly consistent work routines and balanced them with healthy habits.";
+  } else if (consistencyScore >= 50) {
+    overallStatusColor = "Amber";
+    overallStatus = "Good Week";
+    overallStatusExplanation = "Parth maintained a steady rhythm of work, though some daily routines or habits could be more consistent.";
+  } else {
+    overallStatusColor = "Red";
+    overallStatus = "Needs Improvement";
+    overallStatusExplanation = "Parth had low activity and consistency this week; prioritizing rest and routine next week is recommended.";
+  }
+
+  // Calculate Productive Days (count out of 7)
+  let productiveDaysCount = 0;
+  for (let i = 0; i < 7; i++) {
+    const d = new Date(start);
+    d.setDate(d.getDate() + i);
+    const dateStr = d.toISOString().split("T")[0];
+    
+    const hasTarget = thisWeekTargetSessions.some(s => s.started_at && s.started_at.split("T")[0] === dateStr);
+    const hasLearning = thisWeekLearningSessions.some(s => s.started_at && s.started_at.split("T")[0] === dateStr);
+    const hasAct = thisWeekActivities.some(a => a.date === dateStr && ["learning", "bug_report", "recon", "target", "finding"].includes(a.type));
+    const hasFind = thisWeekFindings.some(f => f.submitted_at && f.submitted_at.startsWith(dateStr));
+    
+    if (hasTarget || hasLearning || hasAct || hasFind) {
+      productiveDaysCount++;
+    }
+  }
+
+  // PROGRESS SUMMARY SENTENCES GENERATION
+  let routineSentence = "";
+  if (consistencyScore >= 80) {
+    routineSentence = "Parth maintained an excellent, highly structured daily work and study routine.";
+  } else if (consistencyScore >= 50) {
+    routineSentence = "Parth established a steady work routine this week with decent consistency.";
+  } else {
+    routineSentence = "Parth's work routine was less consistent this week compared to his usual schedule.";
+  }
+
+  const totalSessions = learningBlocksCompleted + reconSessions + bugReportStudyBlocks + reportsSubmitted;
+  const learning30d = learningSessions30d.length + activities30d.filter(a => a.type === "learning").length;
+  const recon30d = targetSessions30d.filter(s => s.type === "Recon").length + activities30d.filter(a => a.type === "recon").length;
+  const study30d = activities30d.filter(a => a.type === "bug_report").length;
+  const reports30dCount = findings30d.length;
+  const totalSessions30d = learning30d + recon30d + study30d + reports30dCount;
+  const avgSessionsWeekly30d = (totalSessions30d / 30) * 7;
+
+  let activitySentence = "";
+  if (totalSessions >= avgSessionsWeekly30d * 1.1) {
+    activitySentence = "He increased his total learning and research sessions, demonstrating measurable progress and higher output than his recent average.";
+  } else if (totalSessions <= avgSessionsWeekly30d * 0.9 && totalSessions > 0) {
+    activitySentence = "He logged fewer learning and research sessions this week than his recent historical average, indicating a slower pace.";
+  } else if (totalSessions === 0) {
+    activitySentence = "He did not log any learning or research sessions this week.";
+  } else {
+    activitySentence = "His overall learning and research sessions remained stable, aligning closely with his recent averages.";
+  }
+
+  let habitsSentence = "";
+  if (avgSleep >= 7.0 && workoutDays >= 3) {
+    habitsSentence = "He effectively balanced his work efforts with healthy recovery habits, maintaining good sleep duration and regular exercise.";
+  } else if (avgSleep < 6.5 && avgSleep > 0) {
+    habitsSentence = "However, his average sleep was below the recommended range, which may have impacted his daytime focus.";
+  } else {
+    habitsSentence = "He maintained solid basic health habits, matching his typical sleep and exercise patterns.";
+  }
+
+  let submissionsSentence = "";
+  if (reportsSubmitted > 0) {
+    if (validReports > 0) {
+      submissionsSentence = `He successfully submitted new security reports, with ${validReports} already verified as accepted progress.`;
+    } else {
+      submissionsSentence = `He submitted ${reportsSubmitted} new security reports that are currently under review.`;
+    }
+  } else {
+    submissionsSentence = "While no new security reports were submitted this week, he focused on building his evaluation and learning routines.";
+  }
+
+  const progressSummary = [routineSentence, activitySentence, habitsSentence, submissionsSentence].join(" ");
+
+  // BIGGEST ACHIEVEMENT SELECTION
+  let biggestAchievement = "Successfully completed another week of structured learning and habit tracking.";
+  const prevConsistency = reportData.comparison?.consistency?.prevWeekValue ?? 0;
+  const reports30d = findings30d.length;
+
+  if (reportsSubmitted > 0 && reports30d === 0) {
+    biggestAchievement = `Submitted his first security report in over a month!`;
+  } else if (validReports > 0 && thisWeekFindings.every(f => ["Valid", "Submitted", "Triaged"].includes(f.status))) {
+    biggestAchievement = `Achieved a 100% acceptance rate on security reports submitted this week.`;
+  } else if (consistencyScore > prevConsistency && consistencyScore >= 85) {
+    biggestAchievement = `Reached an exceptional weekly consistency score of ${consistencyScore}%.`;
+  } else if (workoutDays >= 4) {
+    biggestAchievement = `Maintained great physical health by completing ${workoutDays} workouts this week.`;
+  } else if (avgSleep >= 7.5) {
+    biggestAchievement = `Prioritized physical recovery, averaging ${avgSleep.toFixed(1)} hours of sleep per night.`;
+  } else if (learningBlocksCompleted >= 4) {
+    biggestAchievement = `Logged a strong study week, completing ${learningBlocksCompleted} learning sessions.`;
+  } else if (targetsTested >= 3) {
+    biggestAchievement = `Expanded his research routine by evaluating ${targetsTested} separate systems.`;
+  }
+
+  // FOCUS FOR NEXT WEEK SELECTION
+  let focusNextWeek = "Maintain the current excellent balance between learning, evaluation, and habits.";
+  const avgCoreRecoveryRate = thisWeekEntries.reduce((acc, e) => {
+    const sleepSet = e.bed_time ? 1 : 0;
+    const wakeTimeSet = e.wake_time ? 1 : 0;
+    const readingSet = e.reading ? 1 : 0;
+    const noScreenSet = (e.mobile_screen_time !== null && e.mobile_screen_time !== undefined) ? 1 : 0;
+    return acc + (sleepSet + wakeTimeSet + readingSet + noScreenSet) / 4;
+  }, 0) / (thisWeekEntries.length || 7);
+
+  if (avgSleep < 6.5 && avgSleep > 0) {
+    focusNextWeek = "Prioritize sleep consistency to ensure daytime focus remains high.";
+  } else if (readingBeforeBedDays < 3) {
+    focusNextWeek = "Establish a better evening routine, focusing on reading before bed.";
+  } else if (workoutDays < 2) {
+    focusNextWeek = "Incorporate more regular exercise blocks to maintain healthy energy levels.";
+  } else if (learningBlocksCompleted < 2 && reportsSubmitted === 0) {
+    focusNextWeek = "Increase structured learning sessions to build core skills.";
+  } else if (targetsTested === 0 && learningBlocksCompleted > 0) {
+    focusNextWeek = "Transition to evaluating active systems to apply recent learning sessions.";
+  }
+
+  return {
+    weekNumber: targetWeek,
+    overallStatus,
+    overallStatusColor,
+    overallStatusExplanation,
+    consistencyScore,
+    productiveDaysCount,
+    learningBlocksCompleted,
+    bugReportStudyBlocks,
+    reconSessions,
+    targetsTested,
+    reportsSubmitted,
+    validReports,
+    averageSleep: avgSleep,
+    workoutDays,
+    readingBeforeBedDays,
+    progressSummary,
+    biggestAchievement,
+    focusNextWeek
+  };
+}
+
 export async function sendTestReport(): Promise<{ success: boolean; error?: string }> {
   const config = await getParentReportConfig();
   
-  let provider: NotificationProvider;
-  let recipient = "";
+  const provider = new EmailProvider();
+  const recipient = config.email_address;
 
-  if (config.delivery_method === "Email") {
-    provider = new EmailProvider();
-    recipient = config.email_address;
-  } else if (config.delivery_method === "Telegram") {
-    provider = new TelegramProvider();
-    recipient = config.telegram_chat_id;
-  } else {
-    return { success: false, error: `Unsupported delivery method: ${config.delivery_method}` };
-  }
-
-  // For testing, compile review for the previous calendar week or generate mock review
   const today = new Date();
   const targetWeek = getISOWeek(today);
   const targetYear = getISOWeekYear(today);
 
   try {
-    let reportData: any;
-    try {
-      const review = await getWeeklyReview(targetYear, targetWeek);
-      if (review) {
-        reportData = JSON.parse(review.report_json);
-      } else {
-        reportData = await generateWeeklyReviewReport(targetYear, targetWeek);
-      }
-    } catch {
-      // Fallback if database has zero telemetry records to calculate
-      reportData = {
-        weekNumber: targetWeek,
-        executiveSummary: { 
-          consistencyState: "green",
-          consistencyScore: 85,
-        },
-        workSummary: {
-          totalHuntingHours: 8.5,
-          totalLearningHours: 4.0,
-          totalSessions: 5,
-          reportsSubmitted: 2,
-          validReports: 1,
-        },
-        comparison: {
-          huntingHours: { prevWeekValue: 7.0 },
-          learningHours: { prevWeekValue: 4.5 },
-          consistency: { prevWeekValue: 80 },
-          reportsSubmitted: { prevWeekValue: 1 },
-          validReports: { prevWeekValue: 1 },
-        },
-        habitReview: {
-          workoutCount: 3,
-          workoutCountDiffPrev: 1,
-          readingDays: 4,
-          readingDaysDiffPrev: -1,
-          avgSleepHours: 7.2,
-          avgSleepHoursDiffPrev: 0.4,
-          avgMobileScreenTime: 120,
-          avgMobileScreenTimeDiffPrev: -30,
-        },
-      };
-    }
-
-    const consistencyState: "Green" | "Amber" | "Red" = 
-      reportData.executiveSummary.consistencyState === "green" ? "Green" :
-      reportData.executiveSummary.consistencyState === "amber" ? "Amber" : "Red";
-
-    let dailyLogsCompleted = 5;
-    try {
-      const { start } = getDatesForWeek(targetYear, targetWeek);
-      const startStr = start.toISOString().split("T")[0];
-      const endStr = endOfISOWeek(start).toISOString().split("T")[0];
-      const allEntries = await getAllDailyEntries();
-      const thisWeekEntries = allEntries.filter(e => e.date >= startStr && e.date <= endStr);
-      dailyLogsCompleted = thisWeekEntries.filter(e => e.notes && e.notes.trim() !== "").length;
-      if (thisWeekEntries.length === 0) {
-        dailyLogsCompleted = 5;
-      }
-    } catch {
-      dailyLogsCompleted = 5;
-    }
-
-    const workoutCount = reportData.habitReview?.workoutCount ?? 3;
-    const prevWorkoutCount = workoutCount - (reportData.habitReview?.workoutCountDiffPrev ?? 1);
-
-    const readingCount = reportData.habitReview?.readingDays ?? 4;
-    const prevReadingCount = readingCount - (reportData.habitReview?.readingDaysDiffPrev ?? -1);
-
-    const avgSleep = reportData.habitReview?.avgSleepHours ?? 7.2;
-    const prevAvgSleep = Math.round((avgSleep - (reportData.habitReview?.avgSleepHoursDiffPrev ?? 0.4)) * 10) / 10;
-
-    const avgScreenTime = reportData.habitReview?.avgMobileScreenTime ?? 120;
-    const prevAvgScreenTime = avgScreenTime - (reportData.habitReview?.avgMobileScreenTimeDiffPrev ?? -30);
-
-    const payload: ParentReportData = {
-      weekNumber: reportData.weekNumber,
-      consistencyState,
-      consistencyScore: reportData.executiveSummary.consistencyScore ?? 85,
-      reportsSubmitted: reportData.workSummary.reportsSubmitted,
-      validReports: reportData.workSummary.validReports,
-      dailyLogsCompleted,
-      hunting: {
-        current: reportData.workSummary.totalHuntingHours,
-        previous: reportData.comparison?.huntingHours?.prevWeekValue ?? 7.0,
-      },
-      learning: {
-        current: reportData.workSummary.totalLearningHours,
-        previous: reportData.comparison?.learningHours?.prevWeekValue ?? 4.5,
-      },
-      reading: {
-        current: readingCount,
-        previous: prevReadingCount,
-      },
-      workout: {
-        current: workoutCount,
-        previous: prevWorkoutCount,
-      },
-      sleep: {
-        current: avgSleep,
-        previous: prevAvgSleep,
-      },
-      screenTime: {
-        current: avgScreenTime,
-        previous: prevAvgScreenTime,
-      },
-    };
+    const payload = await compileReportPayload(targetYear, targetWeek);
 
     return await provider.sendReport(
       config.parent_name || "Parent Test",
@@ -323,129 +377,3 @@ export async function sendTestReport(): Promise<{ success: boolean; error?: stri
     return { success: false, error: err.message || "Test dispatch execution fault" };
   }
 }
-
-export async function sendTestEmailDirect(): Promise<{ success: boolean; error?: string }> {
-  // Generate mock ParentReportData for testing SMTP directly
-  const today = new Date();
-  const targetWeek = getISOWeek(today);
-  const targetYear = getISOWeekYear(today);
-
-  try {
-    let reportData: any;
-    try {
-      const review = await getWeeklyReview(targetYear, targetWeek);
-      if (review) {
-        reportData = JSON.parse(review.report_json);
-      } else {
-        reportData = await generateWeeklyReviewReport(targetYear, targetWeek);
-      }
-    } catch {
-      // Fallback if database has zero telemetry records to calculate
-      reportData = {
-        weekNumber: targetWeek,
-        executiveSummary: { 
-          consistencyState: "green",
-          consistencyScore: 85,
-        },
-        workSummary: {
-          totalHuntingHours: 8.5,
-          totalLearningHours: 4.0,
-          totalSessions: 5,
-          reportsSubmitted: 2,
-          validReports: 1,
-        },
-        comparison: {
-          huntingHours: { prevWeekValue: 7.0 },
-          learningHours: { prevWeekValue: 4.5 },
-          consistency: { prevWeekValue: 80 },
-          reportsSubmitted: { prevWeekValue: 1 },
-          validReports: { prevWeekValue: 1 },
-        },
-        habitReview: {
-          workoutCount: 3,
-          workoutCountDiffPrev: 1,
-          readingDays: 4,
-          readingDaysDiffPrev: -1,
-          avgSleepHours: 7.2,
-          avgSleepHoursDiffPrev: 0.4,
-          avgMobileScreenTime: 120,
-          avgMobileScreenTimeDiffPrev: -30,
-        },
-      };
-    }
-
-    const consistencyState: "Green" | "Amber" | "Red" = 
-      reportData.executiveSummary.consistencyState === "green" ? "Green" :
-      reportData.executiveSummary.consistencyState === "amber" ? "Amber" : "Red";
-
-    let dailyLogsCompleted = 5;
-    try {
-      const { start } = getDatesForWeek(targetYear, targetWeek);
-      const startStr = start.toISOString().split("T")[0];
-      const endStr = endOfISOWeek(start).toISOString().split("T")[0];
-      const allEntries = await getAllDailyEntries();
-      const thisWeekEntries = allEntries.filter(e => e.date >= startStr && e.date <= endStr);
-      dailyLogsCompleted = thisWeekEntries.filter(e => e.notes && e.notes.trim() !== "").length;
-      if (thisWeekEntries.length === 0) {
-        dailyLogsCompleted = 5;
-      }
-    } catch {
-      dailyLogsCompleted = 5;
-    }
-
-    const workoutCount = reportData.habitReview?.workoutCount ?? 3;
-    const prevWorkoutCount = workoutCount - (reportData.habitReview?.workoutCountDiffPrev ?? 1);
-
-    const readingCount = reportData.habitReview?.readingDays ?? 4;
-    const prevReadingCount = readingCount - (reportData.habitReview?.readingDaysDiffPrev ?? -1);
-
-    const avgSleep = reportData.habitReview?.avgSleepHours ?? 7.2;
-    const prevAvgSleep = Math.round((avgSleep - (reportData.habitReview?.avgSleepHoursDiffPrev ?? 0.4)) * 10) / 10;
-
-    const avgScreenTime = reportData.habitReview?.avgMobileScreenTime ?? 120;
-    const prevAvgScreenTime = avgScreenTime - (reportData.habitReview?.avgMobileScreenTimeDiffPrev ?? -30);
-
-    const payload: ParentReportData = {
-      weekNumber: reportData.weekNumber,
-      consistencyState,
-      consistencyScore: reportData.executiveSummary.consistencyScore ?? 85,
-      reportsSubmitted: reportData.workSummary.reportsSubmitted,
-      validReports: reportData.workSummary.validReports,
-      dailyLogsCompleted,
-      hunting: {
-        current: reportData.workSummary.totalHuntingHours,
-        previous: reportData.comparison?.huntingHours?.prevWeekValue ?? 7.0,
-      },
-      learning: {
-        current: reportData.workSummary.totalLearningHours,
-        previous: reportData.comparison?.learningHours?.prevWeekValue ?? 4.5,
-      },
-      reading: {
-        current: readingCount,
-        previous: prevReadingCount,
-      },
-      workout: {
-        current: workoutCount,
-        previous: prevWorkoutCount,
-      },
-      sleep: {
-        current: avgSleep,
-        previous: prevAvgSleep,
-      },
-      screenTime: {
-        current: avgScreenTime,
-        previous: prevAvgScreenTime,
-      },
-    };
-
-    const provider = new EmailProvider();
-    return await provider.sendReport(
-      "Parent Test",
-      process.env.PARENT_EMAIL || "",
-      payload
-    );
-  } catch (err: any) {
-    return { success: false, error: err.message || "Test email dispatch execution fault" };
-  }
-}
-

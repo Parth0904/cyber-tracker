@@ -26,7 +26,9 @@ const DEFAULT_FORM: DailyForm = {
 // Conversions & UX time manipulation helpers
 function convert12hTo24h(time12h: string): string {
   const [time, modifier] = time12h.split(" ");
-  let [hours, minutes] = time.split(":").map(Number);
+  const [hStr, mStr] = time.split(":");
+  let hours = Number(hStr);
+  const minutes = Number(mStr);
   if (modifier === "PM" && hours < 12) {
     hours += 12;
   }

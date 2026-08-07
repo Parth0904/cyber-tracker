@@ -1,8 +1,6 @@
 const CACHE_NAME = "cyber-tracker-v1";
 
 const STATIC_ASSETS = [
-  "/",
-  "/login",
   "/manifest.json",
 ];
 
@@ -37,6 +35,10 @@ self.addEventListener("fetch", (event) => {
 
   // Skip non-GET requests
   if (request.method !== "GET") return;
+
+  // Let browser handle page navigations directly to avoid Service Worker caching issues
+  // and redirect errors (e.g. returning a redirected response to a non-follow fetch request)
+  if (request.mode === "navigate") return;
 
   // API requests: network-first
   if (url.pathname.startsWith("/api/")) {

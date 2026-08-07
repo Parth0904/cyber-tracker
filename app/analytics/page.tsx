@@ -3,83 +3,101 @@
 import * as React from "react";
 import { 
   Activity, Clock, Target, BookOpen, 
-  Award, Calendar, ChevronUp, ChevronDown, CheckCircle2
+  Award, Calendar, ChevronUp, ChevronDown, CheckCircle2,
+  Shield, Zap, CheckSquare, TrendingUp, Flame, Info, AwardIcon
 } from "lucide-react";
 import { Panel } from "@/components/ui/Panel";
 import { EmptyState } from "@/components/ui/EmptyState";
 import LineChart from "@/components/charts/LineChart";
 
-type TargetRow = {
+type TargetRank = {
   targetId: string;
   name: string;
-  huntingHours: number;
-  reportsSubmitted: number;
-  validReports: number;
-  hoursPerValidReport: number | null;
+  sessions: number;
+  reports: number;
+  acceptedReports: number;
+  productivityScore: number;
+  efficiency: number;
 };
 
-type TopicRow = {
+type TopicRank = {
   topicId: string;
   name: string;
-  totalHours: number;
-  sessionsCount: number;
-  lastStudiedAt: string | null;
+  learningBlocks: number;
+  recentActivityDays: number | null;
+  studyFrequencyWeeks: number;
 };
 
-type HabitPoint = {
-  date: string;
-  reading: number;
-  workout: number;
-  sleepHours: number;
-  bedTimeMinutes: number;
-  wakeTimeMinutes: number;
-  mobileScreenTime: number;
-  consistency: number;
-  completionPercent: number;
+type HabitTrendPoint = {
+  label: string;
+  averageSleep: number;
+  readingCompliance: number;
+  workoutFrequency: number;
+  recoveryConsistency: number;
+  productivityTrend: number;
+  weeklyConsistencyTrend: number;
 };
 
-type AnalyticsData = {
+type RecordPoint = {
+  name: string;
+  value: string | number;
+  dateOrInterval?: string;
+};
+
+type MilestonePoint = {
+  name: string;
+  unlocked: boolean;
+  dateUnlocked: string | null;
+};
+
+type ProgressComparisonPoint = {
+  metric: string;
+  currentPeriod: string | number;
+  previousPeriod: string | number;
+  change: string;
+};
+
+type RedesignedAnalyticsData = {
   overview: {
-    totalHuntingHours: number;
-    totalLearningHours: number;
-    totalSessions: number;
-    totalTargets: number;
-    totalLearningTopics: number;
-    reportsSubmitted: number;
-    validReports: number;
-    overallConsistency: number;
+    totalProductivityScore: number;
+    totalLearningBlocks: number;
+    totalBugReportStudyBlocks: number;
+    totalReconSessions: number;
+    totalTargetsTested: number;
+    totalFindings: number;
+    activeTargets: number;
+    activeLearningTopics: number;
   };
-  timeAllocation: {
-    daily: { date: string; hunting: number; learning: number }[];
-    weekly: { date: string; hunting: number; learning: number }[];
-    monthly: { date: string; hunting: number; learning: number }[];
-    yearly: { date: string; hunting: number; learning: number }[];
+  allocation: {
+    daily: any[];
+    weekly: any[];
+    monthly: any[];
+    yearly: any[];
   };
-  targetInvestment: TargetRow[];
-  learningInvestment: {
-    all: TopicRow[];
-    mostStudied: TopicRow[];
-    leastStudied: TopicRow[];
-    recentlyLearned: TopicRow[];
-  };
-  habitAnalytics: HabitPoint[];
+  targetInvestment: TargetRank[];
+  learningInvestment: TopicRank[];
+  habitTrends: HabitTrendPoint[];
+  personalRecords: RecordPoint[];
+  growthTimeline: MilestonePoint[];
+  periodComparisons: ProgressComparisonPoint[];
 };
 
 export default function AnalyticsPage() {
-  const [data, setData] = React.useState<AnalyticsData | null>(null);
+  const [data, setData] = React.useState<RedesignedAnalyticsData | null>(null);
   const [loading, setLoading] = React.useState(true);
-  
-  // Section B state: daily / weekly / monthly / yearly
+
+  // Time & Effort Allocation Controls
   const [allocationRange, setAllocationRange] = React.useState<"daily" | "weekly" | "monthly" | "yearly">("daily");
-  
-  // Section C state: sorting targets
-  const [targetSortField, setTargetSortField] = React.useState<keyof TargetRow>("huntingHours");
+  const [allocationMetric, setAllocationMetric] = React.useState<"learningBlocks" | "bugReportStudyBlocks" | "reconSessions" | "targetsTested" | "findings">("learningBlocks");
+
+  // Sorting Targets state
+  const [targetSortField, setTargetSortField] = React.useState<keyof TargetRank>("efficiency");
   const [targetSortOrder, setTargetSortOrder] = React.useState<"asc" | "desc">("desc");
 
-  // Section E state: active habit filter for chart
-  const [activeHabit, setActiveHabit] = React.useState<"sleepHours" | "consistency" | "completionPercent" | "bedTimeMinutes" | "wakeTimeMinutes" | "mobileScreenTime">("consistency");
+  // Long-Term Habits Trends controls
+  const [activeHabitTrend, setActiveHabitTrend] = React.useState<"averageSleep" | "readingCompliance" | "workoutFrequency" | "recoveryConsistency" | "productivityTrend">("recoveryConsistency");
 
-  const syncData = async () => {
+  const syncAnalyticsData = async () => {
     try {
       const res = await fetch("/api/analytics");
       if (res.ok) {
@@ -87,20 +105,20 @@ export default function AnalyticsPage() {
         setData(json);
       }
     } catch (err) {
-      console.error("Failed syncing analytics diagnostics:", err);
+      console.error("Failed to sync analytics performance dataset:", err);
     } finally {
       setLoading(false);
     }
   };
 
   React.useEffect(() => {
-    syncData();
+    syncAnalyticsData();
   }, []);
 
   if (loading) {
     return (
       <div className="flex items-center justify-center min-h-[400px] font-mono text-xs text-zinc-500 uppercase tracking-widest animate-pulse">
-        // INDEXING_PERFORMANCE_ANALYTICS_telemetry...
+        // INDEXING_PERFORMANCE_DIAGNOSTICS_telemetry...
       </div>
     );
   }
@@ -116,20 +134,36 @@ export default function AnalyticsPage() {
     );
   }
 
-  const { overview, timeAllocation, targetInvestment, learningInvestment, habitAnalytics } = data;
+  const { overview, allocation, targetInvestment, learningInvestment, habitTrends, personalRecords, growthTimeline, periodComparisons } = data;
 
-  // Sorting logic for targets
+  const hasAnyData = 
+    overview.totalProductivityScore > 0 || 
+    overview.totalLearningBlocks > 0 || 
+    overview.totalFindings > 0 || 
+    overview.totalTargetsTested > 0 ||
+    habitTrends.some(h => h.averageSleep > 0 || h.recoveryConsistency > 0);
+
+  if (!hasAnyData) {
+    return (
+      <div className="max-w-4xl mx-auto px-4 py-12">
+        <EmptyState 
+          title="No Analytics Data Yet" 
+          description="Your long-term performance telemetry will compile automatically once you start logging daily entries, targets, and study sessions."
+        />
+      </div>
+    );
+  }
+
+  // Sorting Target ranks logic
   const sortedTargets = [...targetInvestment].sort((a, b) => {
     const aVal = a[targetSortField];
     const bVal = b[targetSortField];
-    if (aVal === null) return 1;
-    if (bVal === null) return -1;
     if (aVal < bVal) return targetSortOrder === "asc" ? -1 : 1;
     if (aVal > bVal) return targetSortOrder === "asc" ? 1 : -1;
     return 0;
   });
 
-  const toggleTargetSort = (field: keyof TargetRow) => {
+  const toggleTargetSort = (field: keyof TargetRank) => {
     if (targetSortField === field) {
       setTargetSortOrder(targetSortOrder === "asc" ? "desc" : "asc");
     } else {
@@ -138,165 +172,160 @@ export default function AnalyticsPage() {
     }
   };
 
-  // Helper to format minutes as HH:MM
-  const formatMinutesToTime = (mins: number) => {
-    if (!mins) return "00:00";
-    const h = Math.floor(mins / 60);
-    const m = Math.round(mins % 60);
-    return `${String(h).padStart(2, "0")}:${String(m).padStart(2, "0")}`;
-  };
+  // Format allocation charts data
+  const allocationPoints = allocation[allocationRange] || [];
+  const allocationChartData = allocationPoints.map(p => ({
+    label: p.label,
+    value: p[allocationMetric] || 0
+  }));
 
-  // Sections data prep for charts
-  const allocationPoints = timeAllocation[allocationRange] || [];
-  const huntingChartData = allocationPoints.map(p => ({ label: p.date, value: Math.round(p.hunting * 10) / 10 }));
-  const learningChartData = allocationPoints.map(p => ({ label: p.date, value: Math.round(p.learning * 10) / 10 }));
-
-  // Habit analytics chart mapping
-  const habitChartData = habitAnalytics.map(h => {
-    let val = h[activeHabit];
-    if (activeHabit === "bedTimeMinutes" || activeHabit === "wakeTimeMinutes" || activeHabit === "mobileScreenTime") {
-      // Map minutes to fractional hours for display
-      val = Math.round((val / 60) * 10) / 10;
-    }
-    return {
-      label: h.date.slice(5), // MM-DD
-      value: val,
-    };
-  });
+  // Format habits trend line charts data
+  const habitTrendChartData = habitTrends.map(h => ({
+    label: h.label,
+    value: h[activeHabitTrend] || 0
+  }));
 
   return (
     <div className="max-w-7xl mx-auto px-4 py-6 space-y-8 text-zinc-200">
       
-      {/* 1. PAGE HEADER */}
+      {/* 1. Page Header */}
       <div className="flex flex-col md:flex-row md:items-center justify-between gap-4 border-b border-border-subtle pb-5">
         <div>
           <h1 className="text-sm font-semibold tracking-tight text-white uppercase font-mono flex items-center gap-2">
-            <Activity className="w-4 h-4 text-accent-cyan animate-pulse" /> Security Yield & Time Analytics
+            <Activity className="w-4 h-4 text-accent-cyan animate-pulse" /> Long-Term Performance Metrics
           </h1>
-          <p className="text-[11px] text-zinc-500 mt-0.5 font-mono">// WHAT HAPPENED? - Comprehensive visual diagnostic records.</p>
+          <p className="text-[11px] text-zinc-500 mt-0.5 font-mono">
+            // ANALYTICS - Evaluating long-term growth, target efficiency, and effort trends.
+          </p>
         </div>
       </div>
 
-      {/* 2. SECTION A: Overview KPIs */}
+      {/* 2. Overview Totals */}
       <div className="grid grid-cols-2 md:grid-cols-4 lg:grid-cols-8 gap-4 font-mono text-xs">
         <div className="border border-border-subtle bg-black p-3.5 rounded-lg">
-          <span className="block text-[8px] text-zinc-500 uppercase">Hunting Hours</span>
-          <span className="block text-md font-bold text-accent-cyan mt-1">{overview.totalHuntingHours.toFixed(1)}h</span>
+          <span className="block text-[8px] text-zinc-500 uppercase">Productivity Score</span>
+          <span className="block text-md font-bold text-accent-cyan mt-1">{overview.totalProductivityScore}</span>
         </div>
         <div className="border border-border-subtle bg-black p-3.5 rounded-lg">
-          <span className="block text-[8px] text-zinc-500 uppercase">Learning Hours</span>
-          <span className="block text-md font-bold text-success-emerald mt-1">{overview.totalLearningHours.toFixed(1)}h</span>
+          <span className="block text-[8px] text-zinc-500 uppercase">Learning Blocks</span>
+          <span className="block text-md font-bold text-success-emerald mt-1">{overview.totalLearningBlocks}</span>
         </div>
         <div className="border border-border-subtle bg-black p-3.5 rounded-lg">
-          <span className="block text-[8px] text-zinc-500 uppercase">Total Sessions</span>
-          <span className="block text-md font-bold text-white mt-1">{overview.totalSessions}</span>
+          <span className="block text-[8px] text-zinc-500 uppercase">Bug Studies</span>
+          <span className="block text-md font-bold text-white mt-1">{overview.totalBugReportStudyBlocks}</span>
         </div>
         <div className="border border-border-subtle bg-black p-3.5 rounded-lg">
-          <span className="block text-[8px] text-zinc-500 uppercase">Targets Tracked</span>
-          <span className="block text-md font-bold text-white mt-1">{overview.totalTargets}</span>
+          <span className="block text-[8px] text-zinc-500 uppercase">Recon Sessions</span>
+          <span className="block text-md font-bold text-white mt-1">{overview.totalReconSessions}</span>
         </div>
         <div className="border border-border-subtle bg-black p-3.5 rounded-lg">
-          <span className="block text-[8px] text-zinc-500 uppercase">Study Topics</span>
-          <span className="block text-md font-bold text-white mt-1">{overview.totalLearningTopics}</span>
+          <span className="block text-[8px] text-zinc-500 uppercase">Targets Tested</span>
+          <span className="block text-md font-bold text-white mt-1">{overview.totalTargetsTested}</span>
         </div>
         <div className="border border-border-subtle bg-black p-3.5 rounded-lg">
-          <span className="block text-[8px] text-zinc-500 uppercase">Reports Submitted</span>
-          <span className="block text-md font-bold text-warning-amber mt-1">{overview.reportsSubmitted}</span>
+          <span className="block text-[8px] text-zinc-500 uppercase">Total Findings</span>
+          <span className="block text-md font-bold text-warning-amber mt-1">{overview.totalFindings}</span>
         </div>
         <div className="border border-border-subtle bg-black p-3.5 rounded-lg">
-          <span className="block text-[8px] text-zinc-500 uppercase">Valid Reports</span>
-          <span className="block text-md font-bold text-success-emerald mt-1">{overview.validReports}</span>
+          <span className="block text-[8px] text-zinc-500 uppercase">Active Targets</span>
+          <span className="block text-md font-bold text-zinc-300 mt-1">{overview.activeTargets}</span>
         </div>
         <div className="border border-border-subtle bg-black p-3.5 rounded-lg">
-          <span className="block text-[8px] text-zinc-500 uppercase">Consistency</span>
-          <span className="block text-md font-bold text-white mt-1">{overview.overallConsistency}%</span>
+          <span className="block text-[8px] text-zinc-500 uppercase">Active Topics</span>
+          <span className="block text-md font-bold text-zinc-300 mt-1">{overview.activeLearningTopics}</span>
         </div>
       </div>
 
-      {/* 3. SECTION B: Time Allocation (Hunting vs Learning) */}
+      {/* 3. Time & Effort Allocation */}
       <Panel>
-        <div className="flex flex-col sm:flex-row sm:items-center justify-between gap-3 border-b border-border-subtle pb-4 mb-4">
-          <h3 className="text-xs font-mono font-bold uppercase tracking-wider text-zinc-400 flex items-center gap-1.5">
-            <Clock size={13} className="text-accent-cyan" /> Time Allocation & Burn Velocity
-          </h3>
-          <div className="flex bg-black border border-border-subtle p-0.5 rounded font-mono text-[9px]">
-            {(["daily", "weekly", "monthly", "yearly"] as const).map(range => (
-              <button
-                key={range}
-                onClick={() => setAllocationRange(range)}
-                className={`px-2 py-1 uppercase font-bold transition-all rounded-sm cursor-pointer ${allocationRange === range ? "bg-zinc-800 text-white" : "text-zinc-500 hover:text-zinc-300"}`}
-              >
-                {range}
-              </button>
-            ))}
+        <div className="flex flex-col lg:flex-row lg:items-center justify-between gap-4 border-b border-border-subtle pb-4 mb-4">
+          <div>
+            <h3 className="text-xs font-mono font-bold uppercase tracking-wider text-zinc-400 flex items-center gap-1.5">
+              <Clock size={13} className="text-accent-cyan" /> Effort Allocation Over Time
+            </h3>
+            <p className="text-[10px] text-zinc-500 font-mono mt-0.5">Visualize the count of completed work blocks over chosen intervals.</p>
+          </div>
+          
+          <div className="flex flex-wrap items-center gap-3">
+            {/* Metric Selector Dropdown */}
+            <select
+              value={allocationMetric}
+              onChange={(e) => setAllocationMetric(e.target.value as any)}
+              className="bg-black border border-border-subtle text-zinc-300 font-mono text-[10px] rounded px-2.5 py-1 uppercase focus:outline-none focus:border-accent-cyan"
+            >
+              <option value="learningBlocks">Learning Blocks Completed</option>
+              <option value="bugReportStudyBlocks">Security Report Studies</option>
+              <option value="reconSessions">Research Sessions Completed</option>
+              <option value="targetsTested">Target Systems Evaluated</option>
+              <option value="findings">Security Findings Logged</option>
+            </select>
+
+            {/* Interval Selector Tabs */}
+            <div className="flex bg-black border border-border-subtle p-0.5 rounded font-mono text-[9px]">
+              {(["daily", "weekly", "monthly", "yearly"] as const).map(range => (
+                <button
+                  key={range}
+                  onClick={() => setAllocationRange(range)}
+                  className={`px-2 py-1 uppercase font-bold transition-all rounded-sm cursor-pointer ${allocationRange === range ? "bg-zinc-800 text-white" : "text-zinc-500 hover:text-zinc-300"}`}
+                >
+                  {range}
+                </button>
+              ))}
+            </div>
           </div>
         </div>
 
-        <div className="grid grid-cols-1 lg:grid-cols-2 gap-6">
-          <div className="space-y-2">
-            <div className="flex items-center justify-between text-[10px] font-mono text-zinc-400">
-              <span className="uppercase font-bold text-accent-cyan flex items-center gap-1">
-                <span className="h-1.5 w-1.5 rounded-full bg-accent-cyan" /> Hunting Hours Trend
-              </span>
-              <span>Avg: {(overview.totalHuntingHours / (allocationRange === "daily" ? 30 : 12)).toFixed(1)}h / interval</span>
+        <div className="space-y-2">
+          {allocationChartData.length > 1 ? (
+            <LineChart data={allocationChartData} height={200} />
+          ) : (
+            <div className="h-48 border border-border-subtle/50 bg-black rounded-lg flex items-center justify-center font-mono text-[10px] text-zinc-600">
+              // INSUFFICIENT_TIMELINE_ALLOCATION_SERIES
             </div>
-            {huntingChartData.length > 1 ? (
-              <LineChart data={huntingChartData} height={160} />
-            ) : (
-              <div className="h-40 border border-border-subtle/50 bg-black rounded-lg flex items-center justify-center font-mono text-[10px] text-zinc-600">// INSUFFICIENT_TIMELINE_SERIES</div>
-            )}
-          </div>
-          <div className="space-y-2">
-            <div className="flex items-center justify-between text-[10px] font-mono text-zinc-400">
-              <span className="uppercase font-bold text-success-emerald flex items-center gap-1">
-                <span className="h-1.5 w-1.5 rounded-full bg-success-emerald" /> Learning Hours Trend
-              </span>
-              <span>Avg: {(overview.totalLearningHours / (allocationRange === "daily" ? 30 : 12)).toFixed(1)}h / interval</span>
-            </div>
-            {learningChartData.length > 1 ? (
-              <LineChart data={learningChartData} height={160} />
-            ) : (
-              <div className="h-40 border border-border-subtle/50 bg-black rounded-lg flex items-center justify-center font-mono text-[10px] text-zinc-600">// INSUFFICIENT_TIMELINE_SERIES</div>
-            )}
-          </div>
+          )}
         </div>
       </Panel>
 
-      {/* 4. SECTION C: Target Investment Ranking */}
+      {/* 4. Target Investment Efficiency */}
       <Panel>
         <div className="border-b border-border-subtle pb-4 mb-4">
           <h3 className="text-xs font-mono font-bold uppercase tracking-wider text-zinc-400 flex items-center gap-1.5">
-            <Target size={13} className="text-accent-cyan" /> Target Investment Performance Matrix
+            <Target size={13} className="text-accent-cyan" /> Target Yield & Efficiency Matrix
           </h3>
-          <p className="text-[10px] text-zinc-500 font-mono mt-0.5">Yield metrics aggregated by target container. Click headers to sort.</p>
+          <p className="text-[10px] text-zinc-500 font-mono mt-0.5">Focusing on yield density (accepted reports per session). Click headers to sort.</p>
         </div>
 
         {targetInvestment.length === 0 ? (
-          <EmptyState title="No Active Targets" description="Create targets and log sessions to compute investment indexes." />
+          <EmptyState title="No Active Targets" description="Investment metrics compile once hunting logs are recorded." />
         ) : (
           <div className="border border-border-subtle rounded-lg overflow-hidden bg-black font-mono text-[11px] overflow-x-auto">
             <table className="w-full text-left min-w-[600px]">
               <thead className="bg-zinc-950 border-b border-border-subtle text-zinc-500 text-[9px] uppercase">
                 <tr>
                   <th className="py-3 px-4 text-zinc-400 font-bold">Target</th>
-                  <th className="py-3 px-4 text-right cursor-pointer hover:bg-zinc-900" onClick={() => toggleTargetSort("huntingHours")}>
+                  <th className="py-3 px-4 text-right cursor-pointer hover:bg-zinc-900" onClick={() => toggleTargetSort("sessions")}>
                     <div className="flex items-center justify-end gap-1">
-                      Hunting Hours {targetSortField === "huntingHours" && (targetSortOrder === "asc" ? <ChevronUp size={10} /> : <ChevronDown size={10} />)}
+                      Sessions {targetSortField === "sessions" && (targetSortOrder === "asc" ? <ChevronUp size={10} /> : <ChevronDown size={10} />)}
                     </div>
                   </th>
-                  <th className="py-3 px-4 text-right cursor-pointer hover:bg-zinc-900" onClick={() => toggleTargetSort("reportsSubmitted")}>
+                  <th className="py-3 px-4 text-right cursor-pointer hover:bg-zinc-900" onClick={() => toggleTargetSort("reports")}>
                     <div className="flex items-center justify-end gap-1">
-                      Reports {targetSortField === "reportsSubmitted" && (targetSortOrder === "asc" ? <ChevronUp size={10} /> : <ChevronDown size={10} />)}
+                      Reports {targetSortField === "reports" && (targetSortOrder === "asc" ? <ChevronUp size={10} /> : <ChevronDown size={10} />)}
                     </div>
                   </th>
-                  <th className="py-3 px-4 text-right cursor-pointer hover:bg-zinc-900" onClick={() => toggleTargetSort("validReports")}>
+                  <th className="py-3 px-4 text-right cursor-pointer hover:bg-zinc-900" onClick={() => toggleTargetSort("acceptedReports")}>
                     <div className="flex items-center justify-end gap-1">
-                      Valid Reports {targetSortField === "validReports" && (targetSortOrder === "asc" ? <ChevronUp size={10} /> : <ChevronDown size={10} />)}
+                      Accepted {targetSortField === "acceptedReports" && (targetSortOrder === "asc" ? <ChevronUp size={10} /> : <ChevronDown size={10} />)}
                     </div>
                   </th>
-                  <th className="py-3 px-4 text-right cursor-pointer hover:bg-zinc-900" onClick={() => toggleTargetSort("hoursPerValidReport")}>
+                  <th className="py-3 px-4 text-right cursor-pointer hover:bg-zinc-900" onClick={() => toggleTargetSort("productivityScore")}>
                     <div className="flex items-center justify-end gap-1">
-                      Hours / Valid Report {targetSortField === "hoursPerValidReport" && (targetSortOrder === "asc" ? <ChevronUp size={10} /> : <ChevronDown size={10} />)}
+                      Target Score {targetSortField === "productivityScore" && (targetSortOrder === "asc" ? <ChevronUp size={10} /> : <ChevronDown size={10} />)}
+                    </div>
+                  </th>
+                  <th className="py-3 px-4 text-right cursor-pointer hover:bg-zinc-900" onClick={() => toggleTargetSort("efficiency")}>
+                    <div className="flex items-center justify-end gap-1 text-accent-cyan">
+                      Yield/Session {targetSortField === "efficiency" && (targetSortOrder === "asc" ? <ChevronUp size={10} /> : <ChevronDown size={10} />)}
                     </div>
                   </th>
                 </tr>
@@ -305,11 +334,12 @@ export default function AnalyticsPage() {
                 {sortedTargets.map((row) => (
                   <tr key={row.targetId} className="hover:bg-zinc-950/60 transition-colors">
                     <td className="py-3 px-4 font-bold uppercase text-white">{row.name}</td>
-                    <td className="py-3 px-4 text-right">{row.huntingHours.toFixed(1)}h</td>
-                    <td className="py-3 px-4 text-right text-warning-amber">{row.reportsSubmitted}</td>
-                    <td className="py-3 px-4 text-right text-success-emerald font-bold">{row.validReports}</td>
+                    <td className="py-3 px-4 text-right">{row.sessions}</td>
+                    <td className="py-3 px-4 text-right text-warning-amber">{row.reports}</td>
+                    <td className="py-3 px-4 text-right text-success-emerald font-bold">{row.acceptedReports}</td>
+                    <td className="py-3 px-4 text-right">{row.productivityScore}</td>
                     <td className="py-3 px-4 text-right text-accent-cyan font-bold">
-                      {row.hoursPerValidReport !== null ? `${row.hoursPerValidReport.toFixed(1)}h` : "—"}
+                      {row.efficiency.toFixed(2)}
                     </td>
                   </tr>
                 ))}
@@ -319,96 +349,98 @@ export default function AnalyticsPage() {
         )}
       </Panel>
 
-      {/* 5. SECTION D: Learning Investment ranking */}
-      <div className="grid grid-cols-1 lg:grid-cols-3 gap-6">
-        {/* Most Studied */}
+      {/* 5. Learning Rankings & Comparisons */}
+      <div className="grid grid-cols-1 lg:grid-cols-2 gap-6">
+        
+        {/* Learning Topic Yields */}
         <Panel>
           <div className="border-b border-border-subtle pb-3 mb-3">
             <h4 className="text-xs font-mono font-bold uppercase tracking-wider text-zinc-400 flex items-center gap-1.5">
-              <Award size={13} className="text-success-emerald" /> Most Studied Topics
+              <Award size={13} className="text-success-emerald" /> Learning Topic Rankings
             </h4>
+            <p className="text-[10px] text-zinc-500 font-mono mt-0.5">Ranks study topics by completed learning sessions and frequency.</p>
           </div>
-          {learningInvestment.mostStudied.length === 0 ? (
-            <p className="text-[10px] font-mono text-zinc-600 leading-relaxed">// NO_TOPICS_STUDIED_YET</p>
+          {learningInvestment.length === 0 ? (
+            <p className="text-[10px] font-mono text-zinc-600">// NO_LEARNING_TOPICS_FOUND</p>
           ) : (
             <div className="space-y-2.5 font-mono text-[11px]">
-              {learningInvestment.mostStudied.slice(0, 5).map((tp, idx) => (
+              {learningInvestment.slice(0, 5).map((tp, idx) => (
                 <div key={tp.topicId} className="flex justify-between items-center bg-black/40 border border-border-subtle/40 p-2.5 rounded hover:border-success-emerald/20 transition-all">
-                  <span className="truncate uppercase max-w-[160px] text-zinc-200 font-bold">{idx + 1}. {tp.name}</span>
-                  <span className="text-success-emerald font-bold">{tp.totalHours.toFixed(1)}h <span className="text-zinc-600 font-normal">({tp.sessionsCount} sessions)</span></span>
+                  <div className="flex flex-col gap-0.5">
+                    <span className="truncate uppercase text-zinc-200 font-bold">{idx + 1}. {tp.name}</span>
+                    <span className="text-[9px] text-zinc-500">
+                      {tp.recentActivityDays !== null ? `${tp.recentActivityDays} days since last studied` : "Never studied"}
+                    </span>
+                  </div>
+                  <div className="text-right">
+                    <span className="text-success-emerald font-bold block">{tp.learningBlocks} Sessions</span>
+                    <span className="text-[9px] text-zinc-500">{tp.studyFrequencyWeeks} weeks active</span>
+                  </div>
                 </div>
               ))}
             </div>
           )}
         </Panel>
 
-        {/* Least Studied */}
+        {/* Period Progress Comparisons */}
         <Panel>
           <div className="border-b border-border-subtle pb-3 mb-3">
             <h4 className="text-xs font-mono font-bold uppercase tracking-wider text-zinc-400 flex items-center gap-1.5">
-              <BookOpen size={13} className="text-warning-amber" /> Least Studied Topics
+              <TrendingUp size={13} className="text-accent-cyan" /> Period-over-Period Performance
             </h4>
+            <p className="text-[10px] text-zinc-500 font-mono mt-0.5">Historical comparisons of productivity scores against previous periods.</p>
           </div>
-          {learningInvestment.leastStudied.length === 0 ? (
-            <p className="text-[10px] font-mono text-zinc-600 leading-relaxed">// NO_TOPICS_STUDIED_YET</p>
-          ) : (
-            <div className="space-y-2.5 font-mono text-[11px]">
-              {learningInvestment.leastStudied.slice(0, 5).map((tp, idx) => (
-                <div key={tp.topicId} className="flex justify-between items-center bg-black/40 border border-border-subtle/40 p-2.5 rounded hover:border-warning-amber/20 transition-all">
-                  <span className="truncate uppercase max-w-[160px] text-zinc-200 font-bold">{idx + 1}. {tp.name}</span>
-                  <span className="text-zinc-400">{tp.totalHours.toFixed(1)}h <span className="text-zinc-600 font-normal">({tp.sessionsCount} sessions)</span></span>
-                </div>
-              ))}
-            </div>
-          )}
+          <div className="border border-border-subtle rounded-lg overflow-hidden bg-black font-mono text-[11px]">
+            <table className="w-full text-left">
+              <thead className="bg-zinc-950 border-b border-border-subtle text-zinc-500 text-[9px] uppercase">
+                <tr>
+                  <th className="py-2.5 px-4 text-zinc-400">Comparison Scope</th>
+                  <th className="py-2.5 px-4 text-right">Current Period</th>
+                  <th className="py-2.5 px-4 text-right">Previous Period</th>
+                  <th className="py-2.5 px-4 text-right">Progress</th>
+                </tr>
+              </thead>
+              <tbody className="divide-y divide-border-subtle/50 text-zinc-300">
+                {periodComparisons.map((row, idx) => {
+                  const isNegative = row.change.startsWith("-");
+                  const colorClass = isNegative ? "text-danger-rose" : "text-success-emerald";
+                  return (
+                    <tr key={idx} className="hover:bg-zinc-950/60">
+                      <td className="py-3 px-4 font-bold text-white">{row.metric}</td>
+                      <td className="py-3 px-4 text-right">{row.currentPeriod}</td>
+                      <td className="py-3 px-4 text-right">{row.previousPeriod}</td>
+                      <td className={`py-3 px-4 text-right font-bold ${colorClass}`}>{row.change}</td>
+                    </tr>
+                  );
+                })}
+              </tbody>
+            </table>
+          </div>
         </Panel>
 
-        {/* Recently Studied */}
-        <Panel>
-          <div className="border-b border-border-subtle pb-3 mb-3">
-            <h4 className="text-xs font-mono font-bold uppercase tracking-wider text-zinc-400 flex items-center gap-1.5">
-              <Calendar size={13} className="text-accent-cyan" /> Recently Learned Topics
-            </h4>
-          </div>
-          {learningInvestment.recentlyLearned.length === 0 ? (
-            <p className="text-[10px] font-mono text-zinc-600 leading-relaxed">// NO_TOPICS_STUDIED_YET</p>
-          ) : (
-            <div className="space-y-2.5 font-mono text-[11px]">
-              {learningInvestment.recentlyLearned.slice(0, 5).map((tp) => (
-                <div key={tp.topicId} className="flex justify-between items-center bg-black/40 border border-border-subtle/40 p-2.5 rounded hover:border-accent-cyan/20 transition-all">
-                  <span className="truncate uppercase max-w-[160px] text-zinc-200 font-bold">{tp.name}</span>
-                  <span className="text-zinc-400 text-[10px]">
-                    {tp.lastStudiedAt ? new Date(tp.lastStudiedAt).toLocaleDateString([], { dateStyle: "short" }) : "Never"}
-                  </span>
-                </div>
-              ))}
-            </div>
-          )}
-        </Panel>
       </div>
 
-      {/* 6. SECTION E: Habit Analytics */}
+      {/* 6. Habits Trends */}
       <Panel>
         <div className="flex flex-col sm:flex-row sm:items-center justify-between gap-3 border-b border-border-subtle pb-4 mb-4">
           <div>
             <h3 className="text-xs font-mono font-bold uppercase tracking-wider text-zinc-400 flex items-center gap-1.5">
-              <CheckCircle2 size={13} className="text-success-emerald" /> Core Habit Analytics & Compliance Trend
+              <CheckCircle2 size={13} className="text-success-emerald" /> Long-Term Habits Evolution
             </h3>
-            <p className="text-[10px] text-zinc-500 font-mono mt-0.5">30-day timeline plotting selected habit metrics.</p>
+            <p className="text-[10px] text-zinc-500 font-mono mt-0.5">Plotting monthly compliance trends over the last 6 months.</p>
           </div>
           <div className="flex flex-wrap bg-black border border-border-subtle p-0.5 rounded font-mono text-[9px] gap-0.5">
             {[
-              { id: "consistency", label: "Consistency" },
-              { id: "completionPercent", label: "Completion %" },
-              { id: "sleepHours", label: "Sleep" },
-              { id: "bedTimeMinutes", label: "Bed Time" },
-              { id: "wakeTimeMinutes", label: "Wake Time" },
-              { id: "mobileScreenTime", label: "Screen Time" }
+              { id: "recoveryConsistency", label: "Recovery Compliance" },
+              { id: "averageSleep", label: "Sleep Duration" },
+              { id: "readingCompliance", label: "Bedtime Reading" },
+              { id: "workoutFrequency", label: "Workout Frequency" },
+              { id: "productivityTrend", label: "Productivity Trend" }
             ].map(habit => (
               <button
                 key={habit.id}
-                onClick={() => setActiveHabit(habit.id as any)}
-                className={`px-2 py-1 uppercase font-bold transition-all rounded-sm cursor-pointer ${activeHabit === habit.id ? "bg-zinc-800 text-white" : "text-zinc-500 hover:text-zinc-300"}`}
+                onClick={() => setActiveHabitTrend(habit.id as any)}
+                className={`px-2 py-1 uppercase font-bold transition-all rounded-sm cursor-pointer ${activeHabitTrend === habit.id ? "bg-zinc-800 text-white" : "text-zinc-500 hover:text-zinc-300"}`}
               >
                 {habit.label}
               </button>
@@ -417,46 +449,70 @@ export default function AnalyticsPage() {
         </div>
 
         <div className="space-y-4">
-          {habitChartData.length > 1 ? (
-            <LineChart data={habitChartData} height={180} />
+          {habitTrendChartData.length > 1 ? (
+            <LineChart data={habitTrendChartData} height={180} />
           ) : (
-            <div className="h-44 border border-border-subtle/50 bg-black rounded-lg flex items-center justify-center font-mono text-[10px] text-zinc-600">// INDEXING_DAILY_HABIT_SERIES</div>
+            <div className="h-44 border border-border-subtle/50 bg-black rounded-lg flex items-center justify-center font-mono text-[10px] text-zinc-600">
+              // INDEXING_LONG_TERM_HABIT_TRENDS
+            </div>
           )}
-          
-          <div className="grid grid-cols-2 md:grid-cols-5 gap-4 text-center font-mono text-[11px] pt-2 border-t border-border-subtle/50">
-            <div>
-              <span className="text-zinc-500 block text-[9px] uppercase">Mean Sleep Hours</span>
-              <span className="text-white font-bold text-xs mt-1 block">
-                {(habitAnalytics.reduce((acc, h) => acc + h.sleepHours, 0) / habitAnalytics.length).toFixed(1)}h
-              </span>
-            </div>
-            <div>
-              <span className="text-zinc-500 block text-[9px] uppercase">Mean Bed Time</span>
-              <span className="text-white font-bold text-xs mt-1 block">
-                {formatMinutesToTime(habitAnalytics.reduce((acc, h) => acc + h.bedTimeMinutes, 0) / habitAnalytics.length)}
-              </span>
-            </div>
-            <div>
-              <span className="text-zinc-500 block text-[9px] uppercase">Mean Wake Time</span>
-              <span className="text-white font-bold text-xs mt-1 block">
-                {formatMinutesToTime(habitAnalytics.reduce((acc, h) => acc + h.wakeTimeMinutes, 0) / habitAnalytics.length)}
-              </span>
-            </div>
-            <div>
-              <span className="text-zinc-500 block text-[9px] uppercase">Mean Screen Time</span>
-              <span className="text-white font-bold text-xs mt-1 block">
-                {Math.round(habitAnalytics.reduce((acc, h) => acc + h.mobileScreenTime, 0) / habitAnalytics.length)}m
-              </span>
-            </div>
-            <div>
-              <span className="text-zinc-500 block text-[9px] uppercase">Habit Completion</span>
-              <span className="text-success-emerald font-bold text-xs mt-1 block">
-                {Math.round(habitAnalytics.reduce((acc, h) => acc + h.completionPercent, 0) / habitAnalytics.length)}%
-              </span>
-            </div>
-          </div>
         </div>
       </Panel>
+
+      {/* 7. Records & Timeline */}
+      <div className="grid grid-cols-1 lg:grid-cols-2 gap-6">
+        
+        {/* Personal Records */}
+        <Panel>
+          <div className="border-b border-border-subtle pb-3 mb-3">
+            <h4 className="text-xs font-mono font-bold uppercase tracking-wider text-zinc-400 flex items-center gap-1.5">
+              <Flame size={13} className="text-warning-amber" /> Parth's Personal Records
+            </h4>
+            <p className="text-[10px] text-zinc-500 font-mono mt-0.5">Your highest tracked performance extremes generated dynamically.</p>
+          </div>
+          <div className="divide-y divide-zinc-800 font-mono text-xs">
+            {personalRecords.map((rec, idx) => (
+              <div key={idx} className="py-3 flex justify-between items-center hover:bg-zinc-950/20 px-1 rounded transition-colors">
+                <span className="text-zinc-400 font-bold">{rec.name}</span>
+                <div className="text-right">
+                  <span className="text-white font-bold block">{rec.value}</span>
+                  <span className="text-[10px] text-zinc-500">{rec.dateOrInterval}</span>
+                </div>
+              </div>
+            ))}
+          </div>
+        </Panel>
+
+        {/* Growth Milestone Timeline */}
+        <Panel>
+          <div className="border-b border-border-subtle pb-3 mb-3">
+            <h4 className="text-xs font-mono font-bold uppercase tracking-wider text-zinc-400 flex items-center gap-1.5">
+              <Zap size={13} className="text-accent-cyan" /> Growth Milestones & Timeline
+            </h4>
+            <p className="text-[10px] text-zinc-500 font-mono mt-0.5">Career milestones compiled automatically from logs history.</p>
+          </div>
+          <div className="space-y-3 pt-1">
+            {growthTimeline.map((stone, idx) => (
+              <div key={idx} className="flex items-center justify-between p-2.5 border border-zinc-900 rounded bg-zinc-950/30">
+                <div className="flex items-center gap-2">
+                  <span className={`text-[12px] ${stone.unlocked ? "text-success-emerald" : "text-zinc-600"}`}>
+                    {stone.unlocked ? "🟢" : "🔒"}
+                  </span>
+                  <span className={`text-xs font-mono font-semibold ${stone.unlocked ? "text-zinc-200" : "text-zinc-500 line-through decoration-zinc-700"}`}>
+                    {stone.name}
+                  </span>
+                </div>
+                {stone.unlocked && stone.dateUnlocked && (
+                  <span className="text-[10px] font-mono text-zinc-500">
+                    {new Date(stone.dateUnlocked).toLocaleDateString([], { dateStyle: "medium" })}
+                  </span>
+                )}
+              </div>
+            ))}
+          </div>
+        </Panel>
+
+      </div>
 
     </div>
   );

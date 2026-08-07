@@ -5,18 +5,29 @@ export type MetricComparison = {
 
 export type ParentReportData = {
   weekNumber: number;
-  consistencyState: "Green" | "Amber" | "Red";
+  overallStatus: "Excellent Week" | "Good Week" | "Needs Improvement";
+  overallStatusColor: "Green" | "Amber" | "Red";
+  overallStatusExplanation: string;
   consistencyScore: number;
+  productiveDaysCount: number;
+
+  // Weekly Activity Summary
+  learningBlocksCompleted: number;
+  bugReportStudyBlocks: number;
+  reconSessions: number;
+  targetsTested: number;
   reportsSubmitted: number;
   validReports: number;
-  dailyLogsCompleted: number;
 
-  hunting: MetricComparison;
-  learning: MetricComparison;
-  reading: MetricComparison;
-  workout: MetricComparison;
-  sleep: MetricComparison;
-  screenTime: MetricComparison;
+  // Healthy Habits
+  averageSleep: number;
+  workoutDays: number;
+  readingBeforeBedDays: number;
+
+  // Narrative Feedback
+  progressSummary: string;
+  biggestAchievement: string;
+  focusNextWeek: string;
 };
 
 export interface NotificationProvider {

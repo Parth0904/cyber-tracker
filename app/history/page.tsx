@@ -9,19 +9,11 @@ import HistoryFilters from "@/components/history/HistoryFilters";
 import HistoryTimeline from "@/components/history/HistoryTimeline";
 
 // --- STRICT WORKSPACE COMPONENT ENGINE TYPES ---
-type AuditRecordNode = {
-  id: string;
-  date: string;
-  time: string;
-  title: string;
-  description: string;
-  type: "target" | "habit" | "system";
-  meta?: string;
-};
+type AuditRecordNode = any;
 
 export default function HistoryMasterLogPage() {
   // --- TELEMETRY STATE PIPELINE (No placeholders, starts clean) ---
-  const [records, setRecords] = React.useState<AuditRecordNode[]>([]);
+  const [records, setRecords] = React.useState<any[]>([]);
   const [search, setSearch] = React.useState("");
   const [category, setCategory] = React.useState("all");
   const [loading, setLoading] = React.useState(true);
@@ -58,11 +50,10 @@ export default function HistoryMasterLogPage() {
   const filteredRecords = records.filter((rec) => {
     const query = search.toLowerCase();
     const matchesSearch = 
-      rec.title?.toLowerCase().includes(query) || 
-      rec.description?.toLowerCase().includes(query) || 
-      rec.meta?.toLowerCase().includes(query);
+      rec.date?.toLowerCase().includes(query) || 
+      rec.summary?.toLowerCase().includes(query);
       
-    const matchesCategory = category === "all" || rec.type === category;
+    const matchesCategory = category === "all" || rec.performance === category;
     
     return matchesSearch && matchesCategory;
   });

@@ -1,44 +1,76 @@
-import CredentialsProvider from "next-auth/providers/credentials";
-import type { NextAuthOptions } from "next-auth";
+import crypto from "crypto";
+import { env } from "@/lib/env";
 
-export const authOptions: NextAuthOptions = {
-  providers: [
-    CredentialsProvider({
-      name: "Credentials",
-      credentials: {
-        username: { label: "Username", type: "text" },
-        password: { label: "Password", type: "password" },
-      },
-      async authorize(credentials) {
-        const validUsername = process.env.AUTH_USERNAME;
-        const validPassword = process.env.AUTH_PASSWORD;
+/**
+ * Verify a password against the plaintext password stored in env.authPassword.
+ * Uses a constant-time comparison to prevent timing attacks.
+ */
+export async function verifyPassword(password: string): Promise<boolean> {
+  try {
+    const inputBuffer = Buffer.from(password, "utf-8");
+    const expectedBuffer = Buffer.from(env.authPassword, "utf-8");
+    
+    if (inputBuffer.length !== expectedBuffer.length) {
+      // Perform a dummy timingSafeEqual with the same buffer to mitigate timing attacks based on length
+      crypto.timingSafeEqual(inputBuffer, inputBuffer);
+      return false;
+    }
+    
+    return crypto.timingSafeEqual(inputBuffer, expectedBuffer);
+  } catch (e) {
+    return false;
+  }
+}
 
-        if (!validUsername || !validPassword) {
-          console.error("AUTH_USERNAME or AUTH_PASSWORD not configured.");
-          return null;
-        }
+/**
+ * Create a signed session token.
+ * Token format: <session_id>.<expires_timestamp>.<hmac_signature>
+ */
+export function createSessionToken(expiresAt: number): string {
+  const sessionId = crypto.randomBytes(16).toString("hex");
+  const payload = `${sessionId}.${expiresAt}`;
+  
+  const hmac = crypto.createHmac("sha256", env.authSecret);
+  hmac.update(payload);
+  const signature = hmac.digest("hex");
+  
+  return `${payload}.${signature}`;
+}
 
-        if (
-          credentials?.username === validUsername &&
-          credentials?.password === validPassword
-        ) {
-          return {
-            id: "1",
-            name: validUsername,
-            email: `${validUsername}@cybertracker.local`,
-          };
-        }
-
-        return null;
-      },
-    }),
-  ],
-  pages: {
-    signIn: "/login",
-  },
-  session: {
-    strategy: "jwt",
-    maxAge: 30 * 24 * 60 * 60, // 30 days
-  },
-  secret: process.env.AUTH_SECRET,
-};
+/**
+ * Verify a signed session token and ensure it is not expired.
+ */
+export function verifySessionToken(token: string): boolean {
+  try {
+    if (!token) return false;
+    
+    const parts = token.split(".");
+    if (parts.length !== 3) return false;
+    
+    const [sessionId, expiresStr, signature] = parts;
+    const payload = `${sessionId}.${expiresStr}`;
+    
+    // Verify signature
+    const hmac = crypto.createHmac("sha256", env.authSecret);
+    hmac.update(payload);
+    const expectedSignature = hmac.digest("hex");
+    
+    const signatureBuffer = Buffer.from(signature, "hex");
+    const expectedBuffer = Buffer.from(expectedSignature, "hex");
+    
+    if (signatureBuffer.length !== expectedBuffer.length) {
+      return false;
+    }
+    
+    const isSignatureValid = crypto.timingSafeEqual(signatureBuffer, expectedBuffer);
+    if (!isSignatureValid) return false;
+    
+    // Verify expiration
+    const expiresAt = parseInt(expiresStr, 10);
+    if (isNaN(expiresAt)) return false;
+    
+    return Date.now() < expiresAt;
+  } catch (e) {
+    return false;
+  }
+}

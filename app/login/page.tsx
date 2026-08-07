@@ -1,6 +1,5 @@
 "use client";
 
-import { signIn } from "next-auth/react";
 import { useState } from "react";
 import { useRouter } from "next/navigation";
 import { Shield, Loader2 } from "lucide-react";
@@ -17,19 +16,27 @@ export default function LoginPage() {
     setError("");
     setLoading(true);
 
-    const result = await signIn("credentials", {
-      username,
-      password,
-      redirect: false,
-    });
+    try {
+      const response = await fetch("/api/auth/login", {
+        method: "POST",
+        headers: {
+          "Content-Type": "application/json",
+        },
+        body: JSON.stringify({ password }),
+      });
 
-    setLoading(false);
+      const result = await response.json().catch(() => ({}));
+      setLoading(false);
 
-    if (result?.error) {
-      setError("Invalid credentials. Please try again.");
-    } else {
-      router.push("/");
-      router.refresh();
+      if (!response.ok) {
+        setError(result.error || "Invalid credentials. Please try again.");
+      } else {
+        router.push("/");
+        router.refresh();
+      }
+    } catch (err) {
+      setLoading(false);
+      setError("An unexpected error occurred. Please try again.");
     }
   }
 

@@ -1,5 +1,8 @@
 import { getAllDailyEntries } from "@/lib/repositories/dailyEntries";
 import { getAllSessions } from "@/lib/repositories/targetSessions";
+import { getAllLearningSessions } from "@/lib/repositories/learning";
+import { getAllActivities } from "@/lib/repositories/activities";
+import { getAllFindings } from "@/lib/repositories/targetFindings";
 
 export type ConsistencyResult = {
   state: "green" | "amber" | "red";
@@ -8,7 +11,19 @@ export type ConsistencyResult = {
 
 export async function calculateConsistency(): Promise<ConsistencyResult> {
   try {
-    const allEntries = await getAllDailyEntries();
+    const [
+      allEntries,
+      targetSessions,
+      learningSessions,
+      activities,
+      findings
+    ] = await Promise.all([
+      getAllDailyEntries(),
+      getAllSessions(),
+      getAllLearningSessions(),
+      getAllActivities(),
+      getAllFindings()
+    ]);
 
     // Insufficient historical data checks: need at least 5 logged daily entries overall
     if (allEntries.length < 5) {
@@ -23,52 +38,50 @@ export async function calculateConsistency(): Promise<ConsistencyResult> {
       dates.push(d.toISOString().split("T")[0]);
     }
 
-    const sessions = await getAllSessions();
-
-    let habitSum = 0;
+    let coreRecoverySum = 0;
     let workoutSum = 0;
-    let readingSum = 0;
-    let loggingSum = 0;
-    let sessionSum = 0;
+    let productiveSum = 0;
 
     for (const dateStr of dates) {
       const entry = allEntries.find((e) => e.date === dateStr);
 
-      const bedTimeSet = entry?.bed_time ? 1 : 0;
+      const sleepSet = entry?.bed_time ? 1 : 0;
       const wakeTimeSet = entry?.wake_time ? 1 : 0;
-      const workoutSet = entry?.workout ? 1 : 0;
       const readingSet = entry?.reading ? 1 : 0;
-      const mobileScreenTimeSet = entry?.mobile_screen_time !== undefined && entry?.mobile_screen_time !== null && entry?.mobile_screen_time > 0 ? 1 : 0;
-      const logSet = entry?.notes && entry.notes.trim() !== "" ? 1 : 0;
+      const noScreenSet = (entry?.mobile_screen_time !== null && entry?.mobile_screen_time !== undefined) ? 1 : 0;
 
-      const completedHabits = bedTimeSet + wakeTimeSet + workoutSet + readingSet + mobileScreenTimeSet + logSet;
-      const habitRate = completedHabits / 6;
+      const coreRecoveryRate = (sleepSet + wakeTimeSet + readingSet + noScreenSet) / 4;
+      coreRecoverySum += coreRecoveryRate;
 
-      habitSum += habitRate;
+      const workoutSet = entry?.workout ? 1 : 0;
       workoutSum += workoutSet;
-      readingSum += readingSet;
-      loggingSum += logSet;
 
-      // Check if there was at least one session on this date
-      const hasSession = sessions.some(
-        (s) => s.started_at && s.started_at.startsWith(dateStr)
+      // Productive session checks
+      const hasTargetSession = targetSessions.some(
+        (s) => s.started_at && s.started_at.split("T")[0] === dateStr
       );
-      sessionSum += hasSession ? 1 : 0;
+      const hasLearningSession = learningSessions.some(
+        (s) => s.started_at && s.started_at.split("T")[0] === dateStr
+      );
+      const hasActivity = activities.some(
+        (a) => a.date === dateStr && ["learning", "bug_report", "recon", "target", "finding"].includes(a.type)
+      );
+      const hasFinding = findings.some(
+        (f) => f.submitted_at && f.submitted_at.startsWith(dateStr)
+      );
+
+      const isProductiveDay = hasTargetSession || hasLearningSession || hasActivity || hasFinding ? 1 : 0;
+      productiveSum += isProductiveDay;
     }
 
-    const avgHabitRate = habitSum / 7;
+    const avgCoreRecoveryRate = coreRecoverySum / 7;
     const avgWorkoutRate = workoutSum / 7;
-    const avgReadingRate = readingSum / 7;
-    const avgLoggingRate = loggingSum / 7;
-    const avgSessionRate = sessionSum / 7;
+    const avgProductiveRate = productiveSum / 7;
 
-    // Deterministic formula mapping inputs to score
     const score = Math.round(
-      (avgHabitRate * 0.4 +
+      (avgCoreRecoveryRate * 0.4 +
         avgWorkoutRate * 0.15 +
-        avgReadingRate * 0.15 +
-        avgLoggingRate * 0.15 +
-        avgSessionRate * 0.15) *
+        avgProductiveRate * 0.45) *
         100
     );
 
