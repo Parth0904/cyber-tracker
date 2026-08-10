@@ -1,0 +1,12 @@
+{
+  "crons": [
+    {
+      "path": "/api/reviews/parent-report-cron",
+      "schedule": "0 20 * * *"
+    },
+    {
+      "path": "/api/settings/backup",
+      "schedule": "0 0 * * *"
+    }
+  ]
+}

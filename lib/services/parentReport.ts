@@ -1,4 +1,4 @@
-import { getISOWeek, getISOWeekYear, endOfISOWeek } from "date-fns";
+import { getISOWeek, getISOWeekYear, endOfISOWeek, subWeeks } from "date-fns";
 import { getParentReportConfig, getPendingReportLogs, getReportLog, createReportLog, updateReportLog } from "@/lib/repositories/parentReport";
 import { generateWeeklyReviewReport, getDatesForWeek } from "@/lib/services/weeklyReview";
 import { getWeeklyReview } from "@/lib/repositories/weeklyReview";
@@ -51,6 +51,7 @@ export async function checkAndQueueReport(): Promise<void> {
   let weekday = "";
   let hour = 12;
   let minute = 0;
+  let localDate = new Date();
 
   try {
     const formatter = new Intl.DateTimeFormat("en-US", {
@@ -59,20 +60,21 @@ export async function checkAndQueueReport(): Promise<void> {
       hour: "numeric",
       minute: "2-digit",
       hour12: false,
+      year: "numeric",
+      month: "numeric",
+      day: "numeric",
     });
     const parts = formatter.formatToParts(new Date());
     weekday = parts.find(p => p.type === "weekday")?.value || "";
     hour = Number(parts.find(p => p.type === "hour")?.value || "12");
     minute = Number(parts.find(p => p.type === "minute")?.value || "0");
+
+    const yearVal = Number(parts.find(p => p.type === "year")?.value);
+    const monthVal = Number(parts.find(p => p.type === "month")?.value) - 1; // 0-based
+    const dayVal = Number(parts.find(p => p.type === "day")?.value);
+    localDate = new Date(yearVal, monthVal, dayVal);
   } catch (err) {
     console.error("Timezone matching error in checkAndQueueReport:", err);
-    return;
-  }
-
-  // Reports trigger automatically every Sunday after the configured delivery_time (e.g. "20:00")
-  if (weekday !== "Sunday") {
-    // If not Sunday, still process any pending reports that failed previously
-    await sendPendingReports();
     return;
   }
 
@@ -81,22 +83,32 @@ export async function checkAndQueueReport(): Promise<void> {
   const currentMinutes = hour * 60 + minute;
   const targetMinutes = targetHour * 60 + targetMinute;
 
-  if (currentMinutes < targetMinutes) {
-    // Before scheduled time, skip queueing but check for existing retry jobs
-    await sendPendingReports();
-    return;
+  let targetWeek: number;
+  let targetYear: number;
+
+  if (weekday === "Sunday") {
+    if (currentMinutes >= targetMinutes) {
+      // Sunday after target time: target the week ending today
+      targetWeek = getISOWeek(localDate);
+      targetYear = getISOWeekYear(localDate);
+    } else {
+      // Sunday before target time: target the previous week
+      const prevWeekDate = subWeeks(localDate, 1);
+      targetWeek = getISOWeek(prevWeekDate);
+      targetYear = getISOWeekYear(prevWeekDate);
+    }
+  } else {
+    // Monday through Saturday: target the previous week
+    const prevWeekDate = subWeeks(localDate, 1);
+    targetWeek = getISOWeek(prevWeekDate);
+    targetYear = getISOWeekYear(prevWeekDate);
   }
 
-  // Sunday target time met. Queue report for the ending week (today's ISO week!)
-  const today = new Date();
-  const week = getISOWeek(today);
-  const year = getISOWeekYear(today);
-
   // Check if already queued
-  const logExists = await getReportLog(year, week);
+  const logExists = await getReportLog(targetYear, targetWeek);
   if (!logExists) {
-    console.log(`Queueing Parent Weekly Report for ${year} Week ${week}`);
-    await createReportLog(year, week);
+    console.log(`Queueing Parent Weekly Report for ${targetYear} Week ${targetWeek}`);
+    await createReportLog(targetYear, targetWeek);
   }
 
   // Dispatch reports
