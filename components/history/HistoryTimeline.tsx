@@ -36,6 +36,7 @@ type TimelineItem = {
     reconSessions: string;
   };
   summary: string;
+  notes?: string;
 };
 
 type TimelineProps = {
@@ -115,10 +116,10 @@ export default function HistoryTimeline({ items, onItemSelect }: TimelineProps) 
                 </div>
               </div>
 
-              {/* Summary Text Section */}
-              {item.summary && (
-                <div className="bg-zinc-950/70 p-3 rounded border-l-2 border-accent-cyan text-xs leading-relaxed text-zinc-300 italic">
-                  {item.summary}
+              {/* Summary / Notes Text Section */}
+              {(item.notes || item.summary) && (
+                <div className="bg-zinc-950/70 p-3 rounded border-l-2 border-accent-cyan text-xs leading-relaxed text-zinc-300 italic whitespace-pre-wrap">
+                  {item.notes ? item.notes : item.summary}
                 </div>
               )}
 
@@ -168,10 +169,6 @@ export default function HistoryTimeline({ items, onItemSelect }: TimelineProps) 
                       <span>Learning Sessions:</span>
                       <span className="text-white font-medium font-mono">{item.learning.learningBlocks}</span>
                     </li>
-                    <li className="flex justify-between">
-                      <span>Study Sessions:</span>
-                      <span className="text-white font-medium font-mono">{item.learning.bugReportStudyBlocks}</span>
-                    </li>
                   </ul>
                 </div>
 
@@ -181,10 +178,6 @@ export default function HistoryTimeline({ items, onItemSelect }: TimelineProps) 
                     <Shield size={12} className="text-zinc-500" /> Hunting
                   </h5>
                   <ul className="space-y-1.5 text-zinc-400">
-                    <li className="flex justify-between">
-                      <span>Research Sessions:</span>
-                      <span className="text-white font-medium font-mono">{item.hunting.reconSessions}</span>
-                    </li>
                     <li className="flex justify-between">
                       <span>Systems Evaluated:</span>
                       <span className="text-white font-medium font-mono">{item.hunting.targetsTested}</span>
@@ -215,12 +208,8 @@ export default function HistoryTimeline({ items, onItemSelect }: TimelineProps) 
                       {renderComparisonValue(item.comparison.sleep)}
                     </li>
                     <li className="flex justify-between">
-                      <span>Learning:</span>
+                      <span>Session:</span>
                       {renderComparisonValue(item.comparison.learningBlocks)}
-                    </li>
-                    <li className="flex justify-between">
-                      <span>Research:</span>
-                      {renderComparisonValue(item.comparison.reconSessions)}
                     </li>
                   </ul>
                 </div>

@@ -11,14 +11,13 @@ export function calculateCompletion(entry: DailyEntry | null) {
   if (!entry) {
     return {
       percent: 0,
-      missingCount: 6,
+      missingCount: 5,
       missing: [
         "Bed Time",
         "Wake Time",
         "Workout",
         "Reading",
         "Mobile Screen Time",
-        "Daily Log",
       ],
     };
   }
@@ -44,19 +43,12 @@ export function calculateCompletion(entry: DailyEntry | null) {
       name: "Mobile Screen Time",
       value: entry.mobile_screen_time !== undefined && entry.mobile_screen_time !== null && entry.mobile_screen_time > 0 ? 1 : 0,
     },
-    {
-      name: "Daily Log",
-      value: entry.notes,
-    },
   ];
 
   const missing = fields
     .filter((field) => {
       if (field.name === "Workout" || field.name === "Reading" || field.name === "Mobile Screen Time") {
         return !field.value;
-      }
-      if (field.name === "Daily Log") {
-        return !field.value || (typeof field.value === "string" && field.value.trim() === "");
       }
       return !field.value;
     })

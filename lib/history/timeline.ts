@@ -32,6 +32,7 @@ export type HistoryTimelineItem = {
     reconSessions: string;
   };
   summary: string;
+  notes: string;
 };
 
 function generateDailySummary(
@@ -199,6 +200,7 @@ export function generateHistoryTimeline(
         },
         comparison,
         summary,
+        notes: entry.notes || "",
       };
     })
     .sort((a, b) => b.date.localeCompare(a.date));
