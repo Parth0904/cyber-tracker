@@ -213,6 +213,7 @@ export default function TargetDetailsWorkspace() {
           setAddedFindingIds(prev => [...prev, json.id]);
         }
         await fetchWorkspaceData();
+        window.dispatchEvent(new Event("refresh-consistency-theme"));
       }
     } catch (err) {
       console.error("Failed to add quick finding:", err);
@@ -231,6 +232,7 @@ export default function TargetDetailsWorkspace() {
       if (res.ok) {
         setAddedFindingIds(prev => prev.slice(0, -1));
         await fetchWorkspaceData();
+        window.dispatchEvent(new Event("refresh-consistency-theme"));
       }
     } catch (err) {
       console.error("Failed to undo finding:", err);

@@ -1,4 +1,5 @@
 import { one, many, execute, insertReturningId } from "@/lib/database/query";
+import { invalidateConsistencyCache, invalidateDiagnosticsCache } from "@/lib/services/cache";
 
 export async function getOrCreateTopic(name: string) {
   const existing = await one<any>(
@@ -8,6 +9,7 @@ export async function getOrCreateTopic(name: string) {
   if (existing) return existing;
   
   const id = await insertReturningId("INSERT INTO learning_topics (name) VALUES (?)", name);
+  invalidateDiagnosticsCache();
   return {
     id,
     name,
@@ -21,10 +23,12 @@ export async function getTopic(id: number) {
 
 export async function archiveTopic(id: number) {
   await execute("UPDATE learning_topics SET archived = 1 WHERE id = ?", id);
+  invalidateDiagnosticsCache();
 }
 
 export async function restoreTopic(id: number) {
   await execute("UPDATE learning_topics SET archived = 0 WHERE id = ?", id);
+  invalidateDiagnosticsCache();
 }
 
 export async function getAllTopics() {
@@ -71,6 +75,8 @@ export async function createLearningSession(topicId: number) {
     INSERT INTO learning_sessions (topic_id, started_at, last_active_at)
     VALUES (?, ?, ?)
   `, topicId, now, now);
+  invalidateConsistencyCache();
+  invalidateDiagnosticsCache();
   return id;
 }
 
@@ -93,6 +99,8 @@ export async function terminateLearningSession(id: number) {
     SET ended_at = ?, duration = ?, last_active_at = ?
     WHERE id = ?
   `, now, duration, now, id);
+  invalidateConsistencyCache();
+  invalidateDiagnosticsCache();
 }
 
 export async function updateLearningSessionTimes(id: number, startedAt: string, endedAt: string) {
@@ -104,11 +112,15 @@ export async function updateLearningSessionTimes(id: number, startedAt: string, 
     SET started_at = ?, ended_at = ?, duration = ?, last_active_at = ?
     WHERE id = ?
   `, startedAt, endedAt, duration, endedAt, id);
+  invalidateConsistencyCache();
+  invalidateDiagnosticsCache();
 }
 
 export async function deleteTopic(id: number) {
   await execute("DELETE FROM learning_sessions WHERE topic_id = ?", id);
   await execute("DELETE FROM learning_topics WHERE id = ?", id);
+  invalidateConsistencyCache();
+  invalidateDiagnosticsCache();
 }
 
 export async function getAllLearningSessions() {
@@ -175,4 +187,6 @@ export async function endLearningSessionAtLastActive(id: number) {
     SET ended_at = last_active_at, duration = ?
     WHERE id = ?
   `, duration, id);
+  invalidateConsistencyCache();
+  invalidateDiagnosticsCache();
 }

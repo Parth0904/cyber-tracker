@@ -74,7 +74,7 @@ Generated on ${dateStr} at ${timeStr}`;
       if (!portStr) missingVars.push("SMTP_PORT");
       if (!user) missingVars.push("SMTP_USER");
       if (!pass) missingVars.push("SMTP_PASS");
-      if (!parentEmail) missingVars.push("PARENT_EMAIL");
+      if (!recipient && !parentEmail) missingVars.push("PARENT_EMAIL");
 
       if (missingVars.length > 0) {
         return {
@@ -381,7 +381,7 @@ Generated on ${dateStr} at ${timeStr}`;
 
       await transporter.sendMail({
         from: `"Cyber Tracker" <${user!}>`,
-        to: parentEmail!,
+        to: recipient || parentEmail!,
         subject: emailSubject,
         text: emailBody,
         html: emailHtml,

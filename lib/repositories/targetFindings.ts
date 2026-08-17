@@ -4,6 +4,7 @@ import {
   execute,
   insertReturningId,
 } from "@/lib/database";
+import { invalidateConsistencyCache, invalidateDiagnosticsCache } from "@/lib/services/cache";
 
 export type FindingStatus =
   | "Draft"
@@ -64,7 +65,7 @@ export async function getFinding(
 export async function createFinding(
   finding: Omit<TargetFinding, "id">
 ): Promise<number> {
-  return await insertReturningId(
+  const id = await insertReturningId(
     `
       INSERT INTO target_findings (
         target_id,
@@ -91,13 +92,16 @@ export async function createFinding(
     finding.report_url,
     finding.notes
   );
+  invalidateConsistencyCache();
+  invalidateDiagnosticsCache();
+  return id;
 }
 
 export async function updateFinding(
   id: number,
   finding: Omit<TargetFinding, "id">
 ) {
-  return await execute(
+  const result = await execute(
     `
       UPDATE target_findings
       SET
@@ -123,12 +127,15 @@ export async function updateFinding(
     finding.notes,
     id
   );
+  invalidateConsistencyCache();
+  invalidateDiagnosticsCache();
+  return result;
 }
 
 export async function deleteFinding(
   id: number
 ) {
-  return await execute(
+  const result = await execute(
     `
       DELETE
       FROM target_findings
@@ -136,6 +143,9 @@ export async function deleteFinding(
     `,
     id
   );
+  invalidateConsistencyCache();
+  invalidateDiagnosticsCache();
+  return result;
 }
 
 export async function getAllFindings(): Promise<TargetFinding[]> {

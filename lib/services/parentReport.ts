@@ -1,6 +1,5 @@
-import { getISOWeek, getISOWeekYear, endOfISOWeek, subWeeks } from "date-fns";
 import { getParentReportConfig, getPendingReportLogs, getReportLog, createReportLog, updateReportLog } from "@/lib/repositories/parentReport";
-import { generateWeeklyReviewReport, getDatesForWeek } from "@/lib/services/weeklyReview";
+import { generateWeeklyReviewReport, getDatesForWeek, getISOWeekUTC, getISOWeekYearUTC } from "@/lib/services/weeklyReview";
 import { getWeeklyReview } from "@/lib/repositories/weeklyReview";
 import { getAllDailyEntries } from "@/lib/repositories/dailyEntries";
 import { getAllSessions } from "@/lib/repositories/targetSessions";
@@ -9,6 +8,7 @@ import { getAllFindings } from "@/lib/repositories/targetFindings";
 import { getAllActivities } from "@/lib/repositories/activities";
 import { EmailProvider } from "./notifications/EmailProvider";
 import { NotificationProvider, ParentReportData } from "./notifications/NotificationProvider";
+import { formatDateInTimezone } from "@/lib/services/consistency";
 
 export async function sendPendingReports(): Promise<void> {
   const config = await getParentReportConfig();
@@ -89,19 +89,19 @@ export async function checkAndQueueReport(): Promise<void> {
   if (weekday === "Sunday") {
     if (currentMinutes >= targetMinutes) {
       // Sunday after target time: target the week ending today
-      targetWeek = getISOWeek(localDate);
-      targetYear = getISOWeekYear(localDate);
+      targetWeek = getISOWeekUTC(localDate);
+      targetYear = getISOWeekYearUTC(localDate);
     } else {
       // Sunday before target time: target the previous week
-      const prevWeekDate = subWeeks(localDate, 1);
-      targetWeek = getISOWeek(prevWeekDate);
-      targetYear = getISOWeekYear(prevWeekDate);
+      const prevWeekDate = new Date(localDate.getTime() - 7 * 24 * 60 * 60 * 1000);
+      targetWeek = getISOWeekUTC(prevWeekDate);
+      targetYear = getISOWeekYearUTC(prevWeekDate);
     }
   } else {
     // Monday through Saturday: target the previous week
-    const prevWeekDate = subWeeks(localDate, 1);
-    targetWeek = getISOWeek(prevWeekDate);
-    targetYear = getISOWeekYear(prevWeekDate);
+    const prevWeekDate = new Date(localDate.getTime() - 7 * 24 * 60 * 60 * 1000);
+    targetWeek = getISOWeekUTC(prevWeekDate);
+    targetYear = getISOWeekYearUTC(prevWeekDate);
   }
 
   // Check if already queued
@@ -116,13 +116,16 @@ export async function checkAndQueueReport(): Promise<void> {
 }
 
 async function compileReportPayload(targetYear: number, targetWeek: number): Promise<ParentReportData> {
+  const config = await getParentReportConfig();
+  const timezone = config.time_zone || "UTC";
+
   let reportData: any;
   try {
     const review = await getWeeklyReview(targetYear, targetWeek);
     if (review) {
       reportData = JSON.parse(review.report_json);
     } else {
-      reportData = await generateWeeklyReviewReport(targetYear, targetWeek);
+      reportData = await generateWeeklyReviewReport(targetYear, targetWeek, timezone);
     }
   } catch (err) {
     console.error("Weekly review generation failed, compiling default fallback:", err);
@@ -152,25 +155,13 @@ async function compileReportPayload(targetYear: number, targetWeek: number): Pro
     };
   }
 
-  const { start, end } = getDatesForWeek(targetYear, targetWeek);
-  const startStr = start.toISOString().split("T")[0];
-  const endStr = end.toISOString().split("T")[0];
+  const { start, end, startStr, endStr } = getDatesForWeek(targetYear, targetWeek, timezone);
 
-  const prevWeekDate = new Date(start);
-  prevWeekDate.setDate(prevWeekDate.getDate() - 7);
-  const prevStartStr = prevWeekDate.toISOString().split("T")[0];
-  
-  const prevWeekEndDate = new Date(end);
-  prevWeekEndDate.setDate(prevWeekEndDate.getDate() - 7);
-  const prevEndStr = prevWeekEndDate.toISOString().split("T")[0];
+  const prevStartStr = formatDateInTimezone(new Date(start.getTime() - 7 * 24 * 60 * 60 * 1000), timezone);
+  const prevEndStr = formatDateInTimezone(new Date(end.getTime() - 7 * 24 * 60 * 60 * 1000), timezone);
 
-  const start30d = new Date(start);
-  start30d.setDate(start30d.getDate() - 30);
-  const start30dStr = start30d.toISOString().split("T")[0];
-
-  const end30d = new Date(start);
-  end30d.setDate(end30d.getDate() - 1);
-  const end30dStr = end30d.toISOString().split("T")[0];
+  const start30dStr = formatDateInTimezone(new Date(start.getTime() - 30 * 24 * 60 * 60 * 1000), timezone);
+  const end30dStr = formatDateInTimezone(new Date(start.getTime() - 1 * 24 * 60 * 60 * 1000), timezone);
 
   // Fetch all raw data in parallel
   const [
@@ -189,22 +180,46 @@ async function compileReportPayload(targetYear: number, targetWeek: number): Pro
 
   // Filter this week data
   const thisWeekEntries = allEntries.filter(e => e.date >= startStr && e.date <= endStr);
-  const thisWeekTargetSessions = allTargetSessions.filter(s => s.started_at && s.started_at.split("T")[0] >= startStr && s.started_at.split("T")[0] <= endStr);
-  const thisWeekLearningSessions = allLearningSessions.filter(s => s.started_at && s.started_at.split("T")[0] >= startStr && s.started_at.split("T")[0] <= endStr);
-  const thisWeekFindings = allFindings.filter(f => f.submitted_at && f.submitted_at >= startStr && f.submitted_at <= endStr);
+  const thisWeekTargetSessions = allTargetSessions.filter(s => {
+    if (!s.started_at) return false;
+    const localDateStr = formatDateInTimezone(new Date(s.started_at), timezone);
+    return localDateStr >= startStr && localDateStr <= endStr;
+  });
+  const thisWeekLearningSessions = allLearningSessions.filter(s => {
+    if (!s.started_at) return false;
+    const localDateStr = formatDateInTimezone(new Date(s.started_at), timezone);
+    return localDateStr >= startStr && localDateStr <= endStr;
+  });
+  const thisWeekFindings = allFindings.filter(f => {
+    if (!f.submitted_at) return false;
+    const localDateStr = formatDateInTimezone(new Date(f.submitted_at), timezone);
+    return localDateStr >= startStr && localDateStr <= endStr;
+  });
   const thisWeekActivities = allActivities.filter(a => a.date >= startStr && a.date <= endStr);
 
   // Filter 30-day baseline data for comparisons
   const entries30d = allEntries.filter(e => e.date >= start30dStr && e.date <= end30dStr);
-  const targetSessions30d = allTargetSessions.filter(s => s.started_at && s.started_at.split("T")[0] >= start30dStr && s.started_at.split("T")[0] <= end30dStr);
-  const learningSessions30d = allLearningSessions.filter(s => s.started_at && s.started_at.split("T")[0] >= start30dStr && s.started_at.split("T")[0] <= end30dStr);
-  const findings30d = allFindings.filter(f => f.submitted_at && f.submitted_at >= start30dStr && f.submitted_at <= end30dStr);
+  const targetSessions30d = allTargetSessions.filter(s => {
+    if (!s.started_at) return false;
+    const localDateStr = formatDateInTimezone(new Date(s.started_at), timezone);
+    return localDateStr >= start30dStr && localDateStr <= end30dStr;
+  });
+  const learningSessions30d = allLearningSessions.filter(s => {
+    if (!s.started_at) return false;
+    const localDateStr = formatDateInTimezone(new Date(s.started_at), timezone);
+    return localDateStr >= start30dStr && localDateStr <= end30dStr;
+  });
+  const findings30d = allFindings.filter(f => {
+    if (!f.submitted_at) return false;
+    const localDateStr = formatDateInTimezone(new Date(f.submitted_at), timezone);
+    return localDateStr >= start30dStr && localDateStr <= end30dStr;
+  });
   const activities30d = allActivities.filter(a => a.date >= start30dStr && a.date <= end30dStr);
 
   // Calculate activity counts
   const learningBlocksCompleted = thisWeekLearningSessions.length + thisWeekActivities.filter(a => a.type === "learning").length;
   const bugReportStudyBlocks = thisWeekActivities.filter(a => a.type === "bug_report").length;
-  const reconSessions = thisWeekTargetSessions.filter(s => s.type === "Recon").length + thisWeekActivities.filter(a => a.type === "recon").length;
+  const reconSessions = thisWeekTargetSessions.filter(s => ["Recon", "Testing", "Hunting"].includes(s.type)).length + thisWeekActivities.filter(a => a.type === "recon").length;
   const targetsTested = new Set(thisWeekTargetSessions.map(s => s.target_id)).size;
   const reportsSubmitted = thisWeekFindings.length;
   const validReports = thisWeekFindings.filter(f => f.status === "Valid").length;
@@ -237,14 +252,25 @@ async function compileReportPayload(targetYear: number, targetWeek: number): Pro
   // Calculate Productive Days (count out of 7)
   let productiveDaysCount = 0;
   for (let i = 0; i < 7; i++) {
-    const d = new Date(start);
-    d.setDate(d.getDate() + i);
-    const dateStr = d.toISOString().split("T")[0];
+    const d = new Date(start.getTime() + i * 24 * 60 * 60 * 1000);
+    const dateStr = formatDateInTimezone(d, timezone);
     
-    const hasTarget = thisWeekTargetSessions.some(s => s.started_at && s.started_at.split("T")[0] === dateStr);
-    const hasLearning = thisWeekLearningSessions.some(s => s.started_at && s.started_at.split("T")[0] === dateStr);
+    const hasTarget = thisWeekTargetSessions.some(s => {
+      if (!s.started_at) return false;
+      const localDateStr = formatDateInTimezone(new Date(s.started_at), timezone);
+      return localDateStr === dateStr;
+    });
+    const hasLearning = thisWeekLearningSessions.some(s => {
+      if (!s.started_at) return false;
+      const localDateStr = formatDateInTimezone(new Date(s.started_at), timezone);
+      return localDateStr === dateStr;
+    });
     const hasAct = thisWeekActivities.some(a => a.date === dateStr && ["learning", "bug_report", "recon", "target", "finding"].includes(a.type));
-    const hasFind = thisWeekFindings.some(f => f.submitted_at && f.submitted_at.startsWith(dateStr));
+    const hasFind = thisWeekFindings.some(f => {
+      if (!f.submitted_at) return false;
+      const localDateStr = formatDateInTimezone(new Date(f.submitted_at), timezone);
+      return localDateStr === dateStr;
+    });
     
     if (hasTarget || hasLearning || hasAct || hasFind) {
       productiveDaysCount++;
@@ -263,7 +289,7 @@ async function compileReportPayload(targetYear: number, targetWeek: number): Pro
 
   const totalSessions = learningBlocksCompleted + reconSessions + bugReportStudyBlocks + reportsSubmitted;
   const learning30d = learningSessions30d.length + activities30d.filter(a => a.type === "learning").length;
-  const recon30d = targetSessions30d.filter(s => s.type === "Recon").length + activities30d.filter(a => a.type === "recon").length;
+  const recon30d = targetSessions30d.filter(s => ["Recon", "Testing", "Hunting"].includes(s.type)).length + activities30d.filter(a => a.type === "recon").length;
   const study30d = activities30d.filter(a => a.type === "bug_report").length;
   const reports30dCount = findings30d.length;
   const totalSessions30d = learning30d + recon30d + study30d + reports30dCount;
@@ -281,7 +307,13 @@ async function compileReportPayload(targetYear: number, targetWeek: number): Pro
   }
 
   let habitsSentence = "";
-  if (avgSleep >= 7.0 && workoutDays >= 3) {
+  const hasSleepData = thisWeekEntries.some(e => e.sleep_hours !== null && e.sleep_hours !== undefined && e.sleep_hours > 0);
+  const hasWorkoutData = thisWeekEntries.some(e => e.workout !== null && e.workout !== undefined);
+  const hasReadingData = thisWeekEntries.some(e => e.reading !== null && e.reading !== undefined);
+
+  if (!hasSleepData && !hasWorkoutData && !hasReadingData) {
+    habitsSentence = "Health and recovery telemetry was not sufficiently logged this week.";
+  } else if (avgSleep >= 7.0 && workoutDays >= 3) {
     habitsSentence = "He effectively balanced his work efforts with healthy recovery habits, maintaining good sleep duration and regular exercise.";
   } else if (avgSleep < 6.5 && avgSleep > 0) {
     habitsSentence = "However, his average sleep was below the recommended range, which may have impacted his daytime focus.";
@@ -369,13 +401,25 @@ async function compileReportPayload(targetYear: number, targetWeek: number): Pro
 
 export async function sendTestReport(): Promise<{ success: boolean; error?: string }> {
   const config = await getParentReportConfig();
+  const timezone = config.time_zone || "UTC";
   
   const provider = new EmailProvider();
   const recipient = config.email_address;
 
-  const today = new Date();
-  const targetWeek = getISOWeek(today);
-  const targetYear = getISOWeekYear(today);
+  const formatter = new Intl.DateTimeFormat("en-US", {
+    timeZone: timezone,
+    year: "numeric",
+    month: "numeric",
+    day: "numeric",
+  });
+  const parts = formatter.formatToParts(new Date());
+  const yearVal = Number(parts.find(p => p.type === "year")?.value);
+  const monthVal = Number(parts.find(p => p.type === "month")?.value) - 1;
+  const dayVal = Number(parts.find(p => p.type === "day")?.value);
+  const localDate = new Date(Date.UTC(yearVal, monthVal, dayVal));
+
+  const targetWeek = getISOWeekUTC(localDate);
+  const targetYear = getISOWeekYearUTC(localDate);
 
   try {
     const payload = await compileReportPayload(targetYear, targetWeek);

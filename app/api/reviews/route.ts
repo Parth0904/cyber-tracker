@@ -1,10 +1,11 @@
 import { NextResponse } from "next/server";
-import { getISOWeek, getISOWeekYear, subWeeks } from "date-fns";
 import { getAllWeeklyReviews } from "@/lib/repositories/weeklyReview";
 import { getAllDailyEntries } from "@/lib/repositories/dailyEntries";
 import { getAllSessions } from "@/lib/repositories/targetSessions";
 import { getAllLearningSessions } from "@/lib/repositories/learning";
-import { generateWeeklyReviewReport, getDatesForWeek } from "@/lib/services/weeklyReview";
+import { generateWeeklyReviewReport, getDatesForWeek, getISOWeekUTC, getISOWeekYearUTC } from "@/lib/services/weeklyReview";
+import { getParentReportConfig } from "@/lib/repositories/parentReport";
+import { formatDateInTimezone } from "@/lib/services/consistency";
 
 // GET: Returns lists of all generated and available (can be generated) historical weeks
 export async function GET() {
@@ -14,12 +15,16 @@ export async function GET() {
       dailyEntries,
       targetSessions,
       learningSessions,
+      config
     ] = await Promise.all([
       getAllWeeklyReviews(),
       getAllDailyEntries(),
       getAllSessions(),
       getAllLearningSessions(),
+      getParentReportConfig()
     ]);
+
+    const timezone = config.time_zone || "UTC";
 
     // Construct a set of all unique year-week combinations in the database
     const availableWeeksSet = new Set<string>();
@@ -27,10 +32,13 @@ export async function GET() {
     const addDateToWeeks = (dateStr?: string | null) => {
       if (!dateStr) return;
       try {
-        const d = new Date(dateStr.includes("T") ? dateStr : `${dateStr}T00:00:00Z`);
-        if (isNaN(d.getTime())) return;
-        const w = getISOWeek(d);
-        const y = getISOWeekYear(d);
+        const localDateStr = dateStr.includes("T")
+          ? formatDateInTimezone(new Date(dateStr), timezone)
+          : dateStr;
+        const parts = localDateStr.split("-").map(Number);
+        const d = new Date(Date.UTC(parts[0], parts[1] - 1, parts[2]));
+        const w = getISOWeekUTC(d);
+        const y = getISOWeekYearUTC(d);
         availableWeeksSet.add(`${y}-${w}`);
       } catch {}
     };
@@ -44,9 +52,7 @@ export async function GET() {
       const [year, week] = key.split("-").map(Number);
       const saved = savedReviews.find(r => r.year === year && r.week_number === week);
       
-      const { start, end } = getDatesForWeek(year, week);
-      const startDateStr = start.toISOString().split("T")[0];
-      const endDateStr = end.toISOString().split("T")[0];
+      const { startStr, endStr } = getDatesForWeek(year, week, timezone);
 
       if (saved) {
         let parsedReport: any = null;
@@ -57,8 +63,8 @@ export async function GET() {
         return {
           year,
           week,
-          startDate: startDateStr,
-          endDate: endDateStr,
+          startDate: startStr,
+          endDate: endStr,
           generated: true,
           created_at: saved.created_at,
           consistencyScore: parsedReport?.executiveSummary?.consistencyScore ?? 0,
@@ -70,8 +76,8 @@ export async function GET() {
         return {
           year,
           week,
-          startDate: startDateStr,
-          endDate: endDateStr,
+          startDate: startStr,
+          endDate: endStr,
           generated: false,
         };
       }
@@ -93,13 +99,27 @@ export async function GET() {
 // POST: Cron-trigger endpoint to compile the review for the week that just ended
 export async function POST() {
   try {
-    // Default to the week that just ended (1 week ago from current time)
-    const today = new Date();
-    const lastWeekDate = subWeeks(today, 1);
-    const targetWeek = getISOWeek(lastWeekDate);
-    const targetYear = getISOWeekYear(lastWeekDate);
+    const config = await getParentReportConfig();
+    const timezone = config.time_zone || "UTC";
+
+    // Resolve current date in target timezone to find the last week
+    const formatter = new Intl.DateTimeFormat("en-US", {
+      timeZone: timezone,
+      year: "numeric",
+      month: "numeric",
+      day: "numeric",
+    });
+    const parts = formatter.formatToParts(new Date());
+    const yearVal = Number(parts.find(p => p.type === "year")?.value);
+    const monthVal = Number(parts.find(p => p.type === "month")?.value) - 1;
+    const dayVal = Number(parts.find(p => p.type === "day")?.value);
+    const localDate = new Date(Date.UTC(yearVal, monthVal, dayVal));
+
+    const lastWeekDate = new Date(localDate.getTime() - 7 * 24 * 60 * 60 * 1000);
+    const targetWeek = getISOWeekUTC(lastWeekDate);
+    const targetYear = getISOWeekYearUTC(lastWeekDate);
     
-    const report = await generateWeeklyReviewReport(targetYear, targetWeek);
+    const report = await generateWeeklyReviewReport(targetYear, targetWeek, timezone);
     
     return NextResponse.json({
       success: true,

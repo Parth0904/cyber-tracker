@@ -1,6 +1,7 @@
 import { one, many, execute } from "@/lib/database";
 import { DailyEntry } from "@/lib/types";
 import { TimeRange } from "@/lib/types/analytics";
+import { invalidateConsistencyCache, invalidateDiagnosticsCache } from "@/lib/services/cache";
 
 export async function getTodayEntry(
   date: string
@@ -95,4 +96,6 @@ export async function saveDailyEntry(
     entry.notes,
     entry.mobile_screen_time
   );
+  invalidateConsistencyCache();
+  invalidateDiagnosticsCache();
 }

@@ -3,6 +3,7 @@ import {
   many,
   execute,
 } from "@/lib/database";
+import { invalidateConsistencyCache, invalidateDiagnosticsCache } from "@/lib/services/cache";
 
 export type TargetSession = {
   id: number;
@@ -56,7 +57,7 @@ export async function createSession(
 ) {
   const now = new Date().toISOString();
 
-  return await execute(
+  const result = await execute(
     `
       INSERT INTO target_sessions (
         target_id,
@@ -73,6 +74,9 @@ export async function createSession(
     now,
     now
   );
+  invalidateConsistencyCache();
+  invalidateDiagnosticsCache();
+  return result;
 }
 
 export async function finishSession(
@@ -80,7 +84,7 @@ export async function finishSession(
   endedAt: string,
   duration: number
 ) {
-  return await execute(
+  const result = await execute(
     `
       UPDATE target_sessions
       SET
@@ -92,6 +96,9 @@ export async function finishSession(
     duration,
     id
   );
+  invalidateConsistencyCache();
+  invalidateDiagnosticsCache();
+  return result;
 }
 
 export async function getAllSessions(): Promise<TargetSessionWithTarget[]> {
@@ -156,7 +163,7 @@ export async function terminateSession(
     (new Date(ended).getTime() - new Date(session.started_at).getTime()) / 60000
   );
 
-  return await execute(
+  const result = await execute(
     `
       UPDATE target_sessions
       SET
@@ -168,6 +175,9 @@ export async function terminateSession(
     duration,
     id
   );
+  invalidateConsistencyCache();
+  invalidateDiagnosticsCache();
+  return result;
 }
 
 export async function getSession(id: number): Promise<TargetSession | undefined> {
@@ -202,7 +212,7 @@ export async function finishSessionAtLastActive(id: number) {
     (new Date(endedAt).getTime() - new Date(session.started_at).getTime()) / 60000
   );
 
-  return await execute(
+  const result = await execute(
     `
       UPDATE target_sessions
       SET
@@ -214,6 +224,9 @@ export async function finishSessionAtLastActive(id: number) {
     duration,
     id
   );
+  invalidateConsistencyCache();
+  invalidateDiagnosticsCache();
+  return result;
 }
 
 export async function updateSessionTimes(
@@ -225,7 +238,7 @@ export async function updateSessionTimes(
     (new Date(endedAt).getTime() - new Date(startedAt).getTime()) / 60000
   );
 
-  return await execute(
+  const result = await execute(
     `
       UPDATE target_sessions
       SET
@@ -239,6 +252,9 @@ export async function updateSessionTimes(
     duration,
     id
   );
+  invalidateConsistencyCache();
+  invalidateDiagnosticsCache();
+  return result;
 }
 
 export async function getActiveSessionWithAbandonedStatus() {

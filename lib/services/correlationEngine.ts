@@ -7,6 +7,7 @@ import { getAllActivities } from "@/lib/repositories/activities";
 import { calculateConsistency } from "@/lib/services/consistency";
 import { calculateDailyScore } from "@/lib/scoring";
 import { calculateCompletion } from "@/lib/completion";
+import { getDiagnosticsCache, setDiagnosticsCache } from "@/lib/services/cache";
 
 export type AnalyticsOverview = {
   totalProductivityScore: number;
@@ -101,6 +102,11 @@ export type RedesignedAnalyticsResult = {
 };
 
 export async function getCorrelationDiagnostics(): Promise<RedesignedAnalyticsResult> {
+  const cached = getDiagnosticsCache();
+  if (cached) {
+    return cached.data;
+  }
+
   const [
     dailyEntries,
     targetSessions,
@@ -933,7 +939,7 @@ export async function getCorrelationDiagnostics(): Promise<RedesignedAnalyticsRe
     mobileScreenTime: mobileScreenTimeInsight
   };
 
-  return {
+  const result = {
     overview,
     allocation: {
       daily,
@@ -949,6 +955,8 @@ export async function getCorrelationDiagnostics(): Promise<RedesignedAnalyticsRe
     periodComparisons,
     insights
   };
+  setDiagnosticsCache(result);
+  return result;
 }
 
 // Helpers for ISO Weeks

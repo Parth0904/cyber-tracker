@@ -5,6 +5,28 @@ import { verifySessionToken } from "./lib/auth";
 export function proxy(req: NextRequest) {
   const { pathname } = req.nextUrl;
 
+  // CRON_SECRET validation for scheduled tasks
+  if (pathname === "/api/reviews/parent-report-cron" || pathname === "/api/settings/backup") {
+    const cronSecret = process.env.CRON_SECRET;
+    const isProduction = process.env.NODE_ENV === "production";
+
+    if (isProduction && !cronSecret) {
+      return NextResponse.json(
+        { error: "Unauthorized: CRON_SECRET is not configured in production" },
+        { status: 401 }
+      );
+    }
+
+    if (cronSecret) {
+      const authHeader = req.headers.get("Authorization");
+      if (authHeader !== `Bearer ${cronSecret}`) {
+        return NextResponse.json({ error: "Unauthorized" }, { status: 401 });
+      }
+    }
+
+    return NextResponse.next();
+  }
+
   // Safeguard: completely bypass auth checks for public routes, static assets, and APIs
   if (
     pathname === "/login" ||

@@ -2,6 +2,7 @@ import { many, execute } from "@/lib/database";
 import { ActivityRow } from "@/lib/types";
 import { TimeRange } from "@/lib/types/analytics";
 import { ActivityType } from "@/lib/constants";
+import { invalidateConsistencyCache, invalidateDiagnosticsCache } from "@/lib/services/cache";
 
 export async function getTodayActivities(
   date: string
@@ -110,4 +111,6 @@ export async function incrementActivity(
     date,
     mappedType
   );
+  invalidateConsistencyCache();
+  invalidateDiagnosticsCache();
 }

@@ -218,6 +218,7 @@ export default function SessionsPage() {
       });
     }
     await syncAll();
+    window.dispatchEvent(new Event("refresh-consistency-theme"));
   };
 
   // ── Terminate ─────────────────────────────────────────────────────────────
@@ -228,6 +229,7 @@ export default function SessionsPage() {
         : `/api/sessions/${log.id}/terminate`;
     await fetch(url, { method: "PATCH" });
     await syncAll();
+    window.dispatchEvent(new Event("refresh-consistency-theme"));
   };
 
   // ── Edit ──────────────────────────────────────────────────────────────────
@@ -252,7 +254,11 @@ export default function SessionsPage() {
         headers: { "Content-Type": "application/json" },
         body: JSON.stringify({ startedAt: toISO(editStart), endedAt: toISO(editEnd) }),
       });
-      if (res.ok) { setIsEditOpen(false); await syncAll(); }
+      if (res.ok) { 
+        setIsEditOpen(false); 
+        await syncAll(); 
+        window.dispatchEvent(new Event("refresh-consistency-theme"));
+      }
     } catch (err) {
       console.error("Edit error:", err);
     } finally {

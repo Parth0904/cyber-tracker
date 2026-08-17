@@ -1,13 +1,7 @@
 import { 
-  startOfISOWeek, 
-  endOfISOWeek, 
-  setISOWeek, 
-  setISOWeekYear,
-  getISOWeek, 
-  getISOWeekYear, 
-  subWeeks, 
-  subDays 
-} from "date-fns";
+  formatDateInTimezone, 
+  calculateConsistencyForPeriod 
+} from "@/lib/services/consistency";
 import { getAllDailyEntries } from "@/lib/repositories/dailyEntries";
 import { getAllSessions } from "@/lib/repositories/targetSessions";
 import { getAllLearningSessions } from "@/lib/repositories/learning";
@@ -125,13 +119,92 @@ export type WeeklyReviewReport = {
   };
 };
 
-export function getDatesForWeek(year: number, week: number) {
-  let baseDate = new Date(Date.UTC(year, 0, 4));
-  baseDate = setISOWeekYear(baseDate, year);
-  const targetDate = setISOWeek(baseDate, week);
-  const start = startOfISOWeek(targetDate);
-  const end = endOfISOWeek(targetDate);
-  return { start, end };
+export function getISOWeekUTC(date: Date): number {
+  const d = new Date(Date.UTC(date.getUTCFullYear(), date.getUTCMonth(), date.getUTCDate()));
+  const dayNum = (d.getUTCDay() + 6) % 7;
+  d.setUTCDate(d.getUTCDate() - dayNum + 3);
+  const firstThursday = d.getTime();
+  d.setUTCMonth(0, 1);
+  if (d.getUTCDay() !== 4) {
+    d.setUTCMonth(0, 1 + ((4 - d.getUTCDay() + 7) % 7));
+  }
+  return 1 + Math.ceil((firstThursday - d.getTime()) / 604800000);
+}
+
+export function getISOWeekYearUTC(date: Date): number {
+  const d = new Date(Date.UTC(date.getUTCFullYear(), date.getUTCMonth(), date.getUTCDate()));
+  const dayNum = (d.getUTCDay() + 6) % 7;
+  d.setUTCDate(d.getUTCDate() - dayNum + 3);
+  return d.getUTCFullYear();
+}
+
+function getUtcDateForLocalTime(dateStr: string, timezone: string): Date {
+  const parts = dateStr.match(/^(\d{4})-(\d{2})-(\d{2})T(\d{2}):(\d{2}):(\d{2})(\.(\d{3}))?$/);
+  if (!parts) return new Date(dateStr);
+  
+  const y = parseInt(parts[1], 10);
+  const m = parseInt(parts[2], 10) - 1;
+  const d = parseInt(parts[3], 10);
+  const hr = parseInt(parts[4], 10);
+  const min = parseInt(parts[5], 10);
+  const sec = parseInt(parts[6], 10);
+  const ms = parts[8] ? parseInt(parts[8], 10) : 0;
+  
+  let utcTime = Date.UTC(y, m, d, hr, min, sec, ms);
+  let testDate = new Date(utcTime);
+  
+  const formatter = new Intl.DateTimeFormat("en-US", {
+    timeZone: timezone,
+    year: "numeric",
+    month: "numeric",
+    day: "numeric",
+    hour: "numeric",
+    minute: "numeric",
+    second: "numeric",
+    hour12: false,
+  });
+  
+  for (let iter = 0; iter < 3; iter++) {
+    const formattedParts = formatter.formatToParts(testDate);
+    const fy = parseInt(formattedParts.find(p => p.type === "year")!.value, 10);
+    const fm = parseInt(formattedParts.find(p => p.type === "month")!.value, 10) - 1;
+    const fd = parseInt(formattedParts.find(p => p.type === "day")!.value, 10);
+    const fhr = parseInt(formattedParts.find(p => p.type === "hour")!.value, 10);
+    const fmin = parseInt(formattedParts.find(p => p.type === "minute")!.value, 10);
+    const fsec = parseInt(formattedParts.find(p => p.type === "second")!.value, 10);
+    
+    const formattedUtc = Date.UTC(fy, fm, fd, fhr, fmin, fsec, ms);
+    const diff = utcTime - formattedUtc;
+    if (diff === 0) break;
+    utcTime += diff;
+    testDate = new Date(utcTime);
+  }
+  
+  return testDate;
+}
+
+export function getDatesForWeek(year: number, week: number, timezone = "UTC") {
+  const jan4 = new Date(Date.UTC(year, 0, 4));
+  const day = jan4.getUTCDay();
+  const diffToMonday = day === 0 ? -6 : 1 - day;
+  const mondayOfW1 = new Date(jan4.getTime() + diffToMonday * 24 * 60 * 60 * 1000);
+  
+  const monday = new Date(mondayOfW1.getTime() + (week - 1) * 7 * 24 * 60 * 60 * 1000);
+  const sunday = new Date(monday.getTime() + 6 * 24 * 60 * 60 * 1000);
+  
+  const startStr = monday.toISOString().split("T")[0];
+  const endStr = sunday.toISOString().split("T")[0];
+  
+  const start = getUtcDateForLocalTime(`${startStr}T00:00:00`, timezone);
+  const end = getUtcDateForLocalTime(`${endStr}T23:59:59.999`, timezone);
+  
+  const dates: string[] = [];
+  for (let i = 0; i < 7; i++) {
+    const d = new Date(monday.getTime() + i * 24 * 60 * 60 * 1000);
+    dates.push(d.toISOString().split("T")[0]);
+  }
+
+  return { start, end, startStr, endStr, dates };
 }
 
 function parseTimeToMinutes(timeStr?: string | null): number | null {
@@ -172,79 +245,46 @@ function averageTimeOfStatus(times: string[]): string {
 
 function calculateConsistencyForWeek(
   weekStart: Date,
+  timezone: string,
   entries: any[],
   targetSessions: any[],
   learningSessions: any[],
   activities: any[],
   findings: any[]
 ) {
-  let coreRecoverySum = 0;
-  let workoutSum = 0;
-  let productiveSum = 0;
-  
+  const dates: string[] = [];
   for (let i = 0; i < 7; i++) {
-    const d = new Date(weekStart);
-    d.setDate(d.getDate() + i);
-    const dateStr = d.toISOString().split("T")[0];
-    
-    const entry = entries.find(e => e.date === dateStr);
-    
-    const sleepSet = entry?.bed_time ? 1 : 0;
-    const wakeTimeSet = entry?.wake_time ? 1 : 0;
-    const readingSet = entry?.reading ? 1 : 0;
-    const noScreenSet = (entry?.mobile_screen_time !== null && entry?.mobile_screen_time !== undefined) ? 1 : 0;
-    
-    const coreRecoveryRate = (sleepSet + wakeTimeSet + readingSet + noScreenSet) / 4;
-    coreRecoverySum += coreRecoveryRate;
-    
-    const workoutSet = entry?.workout ? 1 : 0;
-    workoutSum += workoutSet;
-    
-    // Productive session checks
-    const hasTargetSession = targetSessions.some(
-      (s) => s.started_at && s.started_at.split("T")[0] === dateStr
-    );
-    const hasLearningSession = learningSessions.some(
-      (s) => s.started_at && s.started_at.split("T")[0] === dateStr
-    );
-    const hasActivity = activities.some(
-      (a) => a.date === dateStr && ["learning", "bug_report", "recon", "target", "finding"].includes(a.type)
-    );
-    const hasFinding = findings.some(
-      (f) => f.submitted_at && f.submitted_at.startsWith(dateStr)
-    );
-
-    const isProductiveDay = hasTargetSession || hasLearningSession || hasActivity || hasFinding ? 1 : 0;
-    productiveSum += isProductiveDay;
+    const d = new Date(weekStart.getTime() + i * 24 * 60 * 60 * 1000);
+    dates.push(formatDateInTimezone(d, timezone));
   }
-  
-  const avgCoreRecoveryRate = coreRecoverySum / 7;
-  const avgWorkoutRate = workoutSum / 7;
-  const avgProductiveRate = productiveSum / 7;
-  
-  return Math.round(
-    (avgCoreRecoveryRate * 0.4 +
-      avgWorkoutRate * 0.15 +
-      avgProductiveRate * 0.45) *
-      100
+  return calculateConsistencyForPeriod(
+    dates,
+    entries,
+    targetSessions,
+    learningSessions,
+    activities,
+    findings,
+    timezone
   );
 }
 
-export async function generateWeeklyReviewReport(year: number, week: number): Promise<WeeklyReviewReport> {
-  const { start, end } = getDatesForWeek(year, week);
-  const startStr = start.toISOString().split("T")[0];
-  const endStr = end.toISOString().split("T")[0];
+export async function generateWeeklyReviewReport(year: number, week: number, timezone = "UTC"): Promise<WeeklyReviewReport> {
+  const { start, end, startStr, endStr } = getDatesForWeek(year, week, timezone);
   
-  const prevWeekDate = subWeeks(start, 1);
-  const prevStart = startOfISOWeek(prevWeekDate);
-  const prevEnd = endOfISOWeek(prevWeekDate);
-  const prevStartStr = prevStart.toISOString().split("T")[0];
-  const prevEndStr = prevEnd.toISOString().split("T")[0];
+  // Calculate previous week boundaries
+  let prevWeek = week - 1;
+  let prevYear = year;
+  if (prevWeek === 0) {
+    prevYear = year - 1;
+    const dec28 = new Date(Date.UTC(prevYear, 11, 28));
+    prevWeek = getISOWeekUTC(dec28);
+  }
+  const { start: prevStart, end: prevEnd, startStr: prevStartStr, endStr: prevEndStr } = getDatesForWeek(prevYear, prevWeek, timezone);
 
-  const start30d = subDays(start, 30);
-  const end30d = subDays(start, 1);
-  const start30dStr = start30d.toISOString().split("T")[0];
-  const end30dStr = end30d.toISOString().split("T")[0];
+  const start30d = new Date(start.getTime() - 30 * 24 * 60 * 60 * 1000);
+  const end30d = new Date(start.getTime() - 1 * 24 * 60 * 60 * 1000);
+  const start30dStr = formatDateInTimezone(start30d, timezone);
+  const end30dStr = formatDateInTimezone(end30d, timezone);
 
   // 1. Fetch data
   const [
@@ -265,21 +305,57 @@ export async function generateWeeklyReviewReport(year: number, week: number): Pr
 
   // 2. Filter this week data
   const thisWeekEntries = allEntries.filter(e => e.date >= startStr && e.date <= endStr);
-  const thisWeekTargetSessions = allTargetSessions.filter(s => s.started_at && s.started_at.split("T")[0] >= startStr && s.started_at.split("T")[0] <= endStr);
-  const thisWeekLearningSessions = allLearningSessions.filter(s => s.started_at && s.started_at.split("T")[0] >= startStr && s.started_at.split("T")[0] <= endStr);
-  const thisWeekFindings = allFindings.filter(f => f.submitted_at && f.submitted_at >= startStr && f.submitted_at <= endStr);
+  const thisWeekTargetSessions = allTargetSessions.filter(s => {
+    if (!s.started_at) return false;
+    const localDateStr = formatDateInTimezone(new Date(s.started_at), timezone);
+    return localDateStr >= startStr && localDateStr <= endStr;
+  });
+  const thisWeekLearningSessions = allLearningSessions.filter(s => {
+    if (!s.started_at) return false;
+    const localDateStr = formatDateInTimezone(new Date(s.started_at), timezone);
+    return localDateStr >= startStr && localDateStr <= endStr;
+  });
+  const thisWeekFindings = allFindings.filter(f => {
+    if (!f.submitted_at) return false;
+    const localDateStr = formatDateInTimezone(new Date(f.submitted_at), timezone);
+    return localDateStr >= startStr && localDateStr <= endStr;
+  });
 
   // 3. Filter previous week data
   const prevWeekEntries = allEntries.filter(e => e.date >= prevStartStr && e.date <= prevEndStr);
-  const prevWeekTargetSessions = allTargetSessions.filter(s => s.started_at && s.started_at.split("T")[0] >= prevStartStr && s.started_at.split("T")[0] <= prevEndStr);
-  const prevWeekLearningSessions = allLearningSessions.filter(s => s.started_at && s.started_at.split("T")[0] >= prevStartStr && s.started_at.split("T")[0] <= prevEndStr);
-  const prevWeekFindings = allFindings.filter(f => f.submitted_at && f.submitted_at >= prevStartStr && f.submitted_at <= prevEndStr);
+  const prevWeekTargetSessions = allTargetSessions.filter(s => {
+    if (!s.started_at) return false;
+    const localDateStr = formatDateInTimezone(new Date(s.started_at), timezone);
+    return localDateStr >= prevStartStr && localDateStr <= prevEndStr;
+  });
+  const prevWeekLearningSessions = allLearningSessions.filter(s => {
+    if (!s.started_at) return false;
+    const localDateStr = formatDateInTimezone(new Date(s.started_at), timezone);
+    return localDateStr >= prevStartStr && localDateStr <= prevEndStr;
+  });
+  const prevWeekFindings = allFindings.filter(f => {
+    if (!f.submitted_at) return false;
+    const localDateStr = formatDateInTimezone(new Date(f.submitted_at), timezone);
+    return localDateStr >= prevStartStr && localDateStr <= prevEndStr;
+  });
 
   // 4. Filter 30-day baseline data
   const entries30d = allEntries.filter(e => e.date >= start30dStr && e.date <= end30dStr);
-  const targetSessions30d = allTargetSessions.filter(s => s.started_at && s.started_at.split("T")[0] >= start30dStr && s.started_at.split("T")[0] <= end30dStr);
-  const learningSessions30d = allLearningSessions.filter(s => s.started_at && s.started_at.split("T")[0] >= start30dStr && s.started_at.split("T")[0] <= end30dStr);
-  const findings30d = allFindings.filter(f => f.submitted_at && f.submitted_at >= start30dStr && f.submitted_at <= end30dStr);
+  const targetSessions30d = allTargetSessions.filter(s => {
+    if (!s.started_at) return false;
+    const localDateStr = formatDateInTimezone(new Date(s.started_at), timezone);
+    return localDateStr >= start30dStr && localDateStr <= end30dStr;
+  });
+  const learningSessions30d = allLearningSessions.filter(s => {
+    if (!s.started_at) return false;
+    const localDateStr = formatDateInTimezone(new Date(s.started_at), timezone);
+    return localDateStr >= start30dStr && localDateStr <= end30dStr;
+  });
+  const findings30d = allFindings.filter(f => {
+    if (!f.submitted_at) return false;
+    const localDateStr = formatDateInTimezone(new Date(f.submitted_at), timezone);
+    return localDateStr >= start30dStr && localDateStr <= end30dStr;
+  });
 
   // ================= SECTION 2: WORK SUMMARY =================
   const totalHuntingHours = thisWeekTargetSessions.reduce((acc, s) => acc + (s.duration || 0), 0) / 60;
@@ -294,14 +370,14 @@ export async function generateWeeklyReviewReport(year: number, week: number): Pr
   const reportsSubmitted = thisWeekFindings.length;
   const validReports = thisWeekFindings.filter(f => f.status === "Valid").length;
 
-  const consistencyScore = calculateConsistencyForWeek(start, allEntries, allTargetSessions, allLearningSessions, allActivities, allFindings);
+  const consistencyScore = calculateConsistencyForWeek(start, timezone, allEntries, allTargetSessions, allLearningSessions, allActivities, allFindings);
 
   // ================= PREVIOUS WEEK VALUES =================
   const prevHuntingHours = prevWeekTargetSessions.reduce((acc, s) => acc + (s.duration || 0), 0) / 60;
   const prevLearningHours = prevWeekLearningSessions.reduce((acc, s) => acc + (s.duration || 0), 0) / 60;
   const prevReportsSubmitted = prevWeekFindings.length;
   const prevValidReports = prevWeekFindings.filter(f => f.status === "Valid").length;
-  const prevConsistency = calculateConsistencyForWeek(prevStart, allEntries, allTargetSessions, allLearningSessions, allActivities, allFindings);
+  const prevConsistency = calculateConsistencyForWeek(prevStart, timezone, allEntries, allTargetSessions, allLearningSessions, allActivities, allFindings);
 
   // ================= 30-DAY AVERAGE BASELINE (SCALED WEEKLY) =================
   const huntingHours30d = targetSessions30d.reduce((acc, s) => acc + (s.duration || 0), 0) / 60;
@@ -316,9 +392,8 @@ export async function generateWeeklyReviewReport(year: number, week: number): Pr
 
   let sumDailyConsistency30d = 0;
   for (let i = 0; i < 30; i++) {
-    const d = new Date(start30d);
-    d.setDate(d.getDate() + i);
-    const score = calculateConsistencyForWeek(d, allEntries, allTargetSessions, allLearningSessions, allActivities, allFindings);
+    const d = new Date(start30d.getTime() + i * 24 * 60 * 60 * 1000);
+    const score = calculateConsistencyForWeek(d, timezone, allEntries, allTargetSessions, allLearningSessions, allActivities, allFindings);
     sumDailyConsistency30d += score;
   }
   const avgConsistency30d = Math.round(sumDailyConsistency30d / 30);
@@ -617,12 +692,13 @@ export async function generateWeeklyReviewReport(year: number, week: number): Pr
   const weeksMap: Record<string, { year: number; week: number; start: Date; huntingHours: number; learningHours: number; reportsCount: number; entries: any[]; sessions: any[] }> = {};
   
   for (const entry of allEntries) {
-    const d = new Date(entry.date);
-    const w = getISOWeek(d);
-    const y = getISOWeekYear(d);
+    const parts = entry.date.split("-").map(Number);
+    const d = new Date(Date.UTC(parts[0], parts[1] - 1, parts[2]));
+    const w = getISOWeekUTC(d);
+    const y = getISOWeekYearUTC(d);
     const key = `${y}-${w}`;
     if (!weeksMap[key]) {
-      const { start: wkStart } = getDatesForWeek(y, w);
+      const { start: wkStart } = getDatesForWeek(y, w, timezone);
       weeksMap[key] = { year: y, week: w, start: wkStart, huntingHours: 0, learningHours: 0, reportsCount: 0, entries: [], sessions: [] };
     }
     weeksMap[key].entries.push(entry);
@@ -630,12 +706,14 @@ export async function generateWeeklyReviewReport(year: number, week: number): Pr
 
   for (const session of allTargetSessions) {
     if (!session.started_at) continue;
-    const d = new Date(session.started_at);
-    const w = getISOWeek(d);
-    const y = getISOWeekYear(d);
+    const localDateStr = formatDateInTimezone(new Date(session.started_at), timezone);
+    const parts = localDateStr.split("-").map(Number);
+    const d = new Date(Date.UTC(parts[0], parts[1] - 1, parts[2]));
+    const w = getISOWeekUTC(d);
+    const y = getISOWeekYearUTC(d);
     const key = `${y}-${w}`;
     if (!weeksMap[key]) {
-      const { start: wkStart } = getDatesForWeek(y, w);
+      const { start: wkStart } = getDatesForWeek(y, w, timezone);
       weeksMap[key] = { year: y, week: w, start: wkStart, huntingHours: 0, learningHours: 0, reportsCount: 0, entries: [], sessions: [] };
     }
     weeksMap[key].huntingHours += (session.duration || 0) / 60;
@@ -644,12 +722,14 @@ export async function generateWeeklyReviewReport(year: number, week: number): Pr
 
   for (const session of allLearningSessions) {
     if (!session.started_at) continue;
-    const d = new Date(session.started_at);
-    const w = getISOWeek(d);
-    const y = getISOWeekYear(d);
+    const localDateStr = formatDateInTimezone(new Date(session.started_at), timezone);
+    const parts = localDateStr.split("-").map(Number);
+    const d = new Date(Date.UTC(parts[0], parts[1] - 1, parts[2]));
+    const w = getISOWeekUTC(d);
+    const y = getISOWeekYearUTC(d);
     const key = `${y}-${w}`;
     if (!weeksMap[key]) {
-      const { start: wkStart } = getDatesForWeek(y, w);
+      const { start: wkStart } = getDatesForWeek(y, w, timezone);
       weeksMap[key] = { year: y, week: w, start: wkStart, huntingHours: 0, learningHours: 0, reportsCount: 0, entries: [], sessions: [] };
     }
     weeksMap[key].learningHours += (session.duration || 0) / 60;
@@ -658,19 +738,21 @@ export async function generateWeeklyReviewReport(year: number, week: number): Pr
 
   for (const finding of allFindings) {
     if (!finding.submitted_at) continue;
-    const d = new Date(finding.submitted_at);
-    const w = getISOWeek(d);
-    const y = getISOWeekYear(d);
+    const localDateStr = formatDateInTimezone(new Date(finding.submitted_at), timezone);
+    const parts = localDateStr.split("-").map(Number);
+    const d = new Date(Date.UTC(parts[0], parts[1] - 1, parts[2]));
+    const w = getISOWeekUTC(d);
+    const y = getISOWeekYearUTC(d);
     const key = `${y}-${w}`;
     if (!weeksMap[key]) {
-      const { start: wkStart } = getDatesForWeek(y, w);
+      const { start: wkStart } = getDatesForWeek(y, w, timezone);
       weeksMap[key] = { year: y, week: w, start: wkStart, huntingHours: 0, learningHours: 0, reportsCount: 0, entries: [], sessions: [] };
     }
     weeksMap[key].reportsCount += 1;
   }
 
   const weeksList = Object.values(weeksMap).map(wk => {
-    const score = calculateConsistencyForWeek(wk.start, allEntries, allTargetSessions, allLearningSessions, allActivities, allFindings);
+    const score = calculateConsistencyForWeek(wk.start, timezone, allEntries, allTargetSessions, allLearningSessions, allActivities, allFindings);
     return { ...wk, consistencyScore: score };
   });
 
