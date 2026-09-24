@@ -11,7 +11,15 @@
     "reset": "tsx lib/database/reset.ts",
     "seed": "tsx lib/database/seed.ts",
     "backup": "tsx lib/database/backup.ts",
-    "postgres-init": "tsx scripts/postgres-init.ts"
+    "postgres-init": "tsx scripts/postgres-init.ts",
+    "agent:dev": "tsx agent/src/index.ts",
+    "agent:status": "tsx agent/src/cli.ts status",
+    "agent:start": "powershell -ExecutionPolicy Bypass -File agent/scripts/start-agent.ps1",
+    "agent:stop": "powershell -ExecutionPolicy Bypass -File agent/scripts/stop-agent.ps1",
+    "agent:check": "powershell -ExecutionPolicy Bypass -File agent/scripts/check-agent.ps1",
+    "agent:install": "powershell -ExecutionPolicy Bypass -File agent/scripts/install-task.ps1",
+    "agent:uninstall": "powershell -ExecutionPolicy Bypass -File agent/scripts/uninstall-task.ps1",
+    "agent:test": "tsx --test agent/tests/**/*.test.ts"
   },
   "dependencies": {
     "better-sqlite3": "^12.10.0",

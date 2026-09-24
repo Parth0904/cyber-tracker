@@ -3,7 +3,6 @@ import { Geist, Geist_Mono } from "next/font/google";
 import "./globals.css";
 import TopNavbar from "@/components/dashboard/TopNavbar";
 import { ConsistencyProvider } from "@/components/dashboard/ConsistencyTheme";
-import { SessionHudWidget } from "@/components/dashboard/SessionHudWidget";
 import { ServiceWorkerRegister } from "@/components/ServiceWorkerRegister";
 
 const geistSans = Geist({
@@ -48,7 +47,6 @@ export default function RootLayout({
         <ConsistencyProvider>
           <TopNavbar />
           {children}
-          <SessionHudWidget />
         </ConsistencyProvider>
         <ServiceWorkerRegister />
       </body>

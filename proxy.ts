@@ -1,9 +1,28 @@
 import { NextResponse } from "next/server";
 import type { NextRequest } from "next/server";
-import { verifySessionToken } from "./lib/auth";
+import { verifySessionToken, verifyAgentToken } from "./lib/auth";
 
 export function proxy(req: NextRequest) {
   const { pathname } = req.nextUrl;
+
+  // Agent sync API authentication (Bearer token)
+  if (pathname.startsWith("/api/agent/")) {
+    const authHeader = req.headers.get("Authorization");
+    if (!authHeader || !authHeader.startsWith("Bearer ")) {
+      return NextResponse.json(
+        { error: "Unauthorized: Missing Bearer token for agent sync" },
+        { status: 401 }
+      );
+    }
+    const token = authHeader.slice(7);
+    if (!verifyAgentToken(token)) {
+      return NextResponse.json(
+        { error: "Unauthorized: Invalid agent sync token" },
+        { status: 401 }
+      );
+    }
+    return NextResponse.next();
+  }
 
   // CRON_SECRET validation for scheduled tasks
   if (pathname === "/api/reviews/parent-report-cron" || pathname === "/api/settings/backup") {
@@ -36,8 +55,7 @@ export function proxy(req: NextRequest) {
     pathname.startsWith("/icons/") ||
     pathname === "/manifest.json" ||
     pathname === "/sw.js" ||
-    pathname === "/favicon.ico" ||
-    /^\/api\/learning\/sessions\/\d+\/terminate$/.test(pathname)
+    pathname === "/favicon.ico"
   ) {
     return NextResponse.next();
   }
@@ -65,6 +83,6 @@ export function proxy(req: NextRequest) {
 
 export const config = {
   matcher: [
-    "/((?!login|api/auth|api/learning/sessions/\\d+/terminate|_next|icons|manifest\\.json|sw\\.js|favicon\\.ico|.*\\.).*)",
+    "/((?!login|api/auth|_next|icons|manifest\\.json|sw\\.js|favicon\\.ico|.*\\.).*)",
   ],
 };

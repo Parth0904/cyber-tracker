@@ -39,7 +39,6 @@ Activity Summary:
 - Accepted Security Reports: ${reportData.validReports}
 
 Healthy Habits:
-- Average Sleep: ${reportData.averageSleep.toFixed(1)} hours/night
 - Workout Days: ${reportData.workoutDays} days
 - Reading Before Bed: ${reportData.readingBeforeBedDays} days
 
@@ -294,12 +293,12 @@ Generated on ${dateStr} at ${timeStr}`;
       <div class="card">
         <h3 class="card-title">Consistency</h3>
         <p class="big-value">${reportData.consistencyScore}%</p>
-        <p class="small-label">${reportData.productiveDaysCount} of 7 productive days</p>
+        <p class="small-label">Weekly habit consistency</p>
       </div>
       <div class="card">
-        <h3 class="card-title">Sleep Quality</h3>
-        <p class="big-value">${reportData.averageSleep.toFixed(1)}h</p>
-        <p class="small-label">Average hours per night</p>
+        <h3 class="card-title">Productive Days</h3>
+        <p class="big-value">${reportData.productiveDaysCount} / 7</p>
+        <p class="small-label">Days with logged activity</p>
       </div>
     </div>
 

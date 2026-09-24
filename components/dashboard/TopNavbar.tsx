@@ -4,8 +4,7 @@ import * as React from "react";
 import Link from "next/link";
 import { usePathname } from "next/navigation";
 import { 
-  Terminal, Target, Layers, 
-  FileText, Activity, Brain, History, BookOpen, Settings
+  Terminal, FileText, Activity, Brain, Settings
 } from "lucide-react";
 
 export default function TopNavbar() {
@@ -15,16 +14,11 @@ export default function TopNavbar() {
     return null;
   }
 
-  // FIXED: Integrated the "/history" path into the core tracking array
   const navItems = [
     { href: "/", label: "Console", icon: <Terminal size={13} /> },
-    { href: "/targets", label: "Targets", icon: <Target size={13} /> },
-    { href: "/learning", label: "Learning", icon: <BookOpen size={13} /> },
-    { href: "/sessions", label: "Sessions", icon: <Layers size={13} /> },
-    { href: "/reviews", label: "Weekly Review", icon: <FileText size={13} /> },
-    { href: "/history", label: "History Log", icon: <History size={13} /> },
+    { href: "/reviews", label: "Reviews", icon: <FileText size={13} /> },
     { href: "/analytics", label: "Analytics", icon: <Activity size={13} /> },
-    { href: "/insights", label: "Performance Intelligence", icon: <Brain size={13} /> },
+    { href: "/insights", label: "Holiday Intelligence", icon: <Brain size={13} /> },
   ];
 
   return (

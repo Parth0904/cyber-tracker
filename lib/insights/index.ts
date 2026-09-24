@@ -1,10 +1,7 @@
 import { buildDailyScoreMap } from "@/lib/scoring";
 
 import { generateReadingInsight } from "./reading";
-import { generateSleepInsight } from "./sleep";
-import { generateBedTimeInsight } from "./bedtime";
 import { generateWorkoutInsight } from "./workout";
-import { generateMobileScreenTimeInsight } from "./mobileScreenTime";
 
 import {
   ActivityRow,
@@ -47,37 +44,17 @@ export function generateInsights(
     buildDailyScoreMap(activities);
 
   const insights: Insight[] = [
-
     generateReadingInsight(
-      dailyEntries,
+      dailyEntries.map((d) => ({ date: d.date, reading: d.reading ?? 0 })),
       scoreMap,
-      today.reading
-    ),
-
-    generateSleepInsight(
-      dailyEntries,
-      scoreMap,
-      today.sleep_hours
-    ),
-
-    generateBedTimeInsight(
-      dailyEntries,
-      scoreMap,
-      today.bed_time
+      today.reading ?? 0
     ),
 
     generateWorkoutInsight(
-      dailyEntries,
+      dailyEntries.map((d) => ({ date: d.date, workout: d.workout ?? 0 })),
       scoreMap,
-      today.workout
+      today.workout ?? 0
     ),
-
-    generateMobileScreenTimeInsight(
-      dailyEntries,
-      scoreMap,
-      today.mobile_screen_time ?? null
-    ),
-
   ];
 
   const confidenceWeight = {

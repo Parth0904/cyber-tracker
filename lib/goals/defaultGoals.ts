@@ -4,9 +4,6 @@ export type DailyGoals = {
   target: number;
   finding: number;
   bug_report: number;
-
-  reading: number;
-  sleep: number;
 };
 
 export const defaultGoals: DailyGoals = {
@@ -15,7 +12,4 @@ export const defaultGoals: DailyGoals = {
   target: 1,
   finding: 1,
   bug_report: 1,
-
-  reading: 1,
-  sleep: 8,
 };

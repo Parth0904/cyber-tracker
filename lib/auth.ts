@@ -74,3 +74,35 @@ export function verifySessionToken(token: string): boolean {
     return false;
   }
 }
+
+/**
+ * Verify agent sync Bearer token.
+ * Uses constant-time comparison to prevent timing attacks.
+ * Accepts either AGENT_SYNC_TOKEN or env.authSecret.
+ */
+export function verifyAgentToken(token: string): boolean {
+  try {
+    if (!token || typeof token !== "string") return false;
+
+    const allowedTokens = [
+      process.env.AGENT_SYNC_TOKEN,
+      env.authSecret,
+    ].filter((t): t is string => Boolean(t && t.trim() !== ""));
+
+    const inputBuffer = Buffer.from(token.trim(), "utf-8");
+
+    for (const allowed of allowedTokens) {
+      const allowedBuffer = Buffer.from(allowed.trim(), "utf-8");
+      if (inputBuffer.length === allowedBuffer.length) {
+        if (crypto.timingSafeEqual(inputBuffer, allowedBuffer)) {
+          return true;
+        }
+      }
+    }
+
+    return false;
+  } catch {
+    return false;
+  }
+}
+

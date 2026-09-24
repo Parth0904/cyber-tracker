@@ -1,4 +1,5 @@
 import { DailyEntry } from "@/lib/types";
+import { calculateDailyCompletion } from "@/lib/services/metrics/completion";
 
 export type Streak = {
   current: number;
@@ -6,19 +7,6 @@ export type Streak = {
   completedDays: number;
   completionRate: number;
 };
-
-function isCompleted(entry: DailyEntry) {
-  let score = 0;
-
-  if (entry.bed_time) score++;
-  if (entry.wake_time) score++;
-  if (entry.workout) score++;
-  if (entry.reading) score++;
-  if (entry.mobile_screen_time !== undefined && entry.mobile_screen_time !== null && entry.mobile_screen_time > 0) score++;
-  if (entry.notes && entry.notes.trim() !== "") score++;
-
-  return score >= 5;
-}
 
 export function generateStreak(
   entries: DailyEntry[]
@@ -44,9 +32,7 @@ export function generateStreak(
   let completed = 0;
 
   for (const entry of sorted) {
-
-    if (isCompleted(entry)) {
-
+    if (calculateDailyCompletion(entry).isFullyCompleted) {
       completed++;
       running++;
 
@@ -54,13 +40,9 @@ export function generateStreak(
         longest,
         running
       );
-
     } else {
-
       running = 0;
-
     }
-
   }
 
   for (
@@ -68,17 +50,11 @@ export function generateStreak(
     i >= 0;
     i--
   ) {
-
-    if (isCompleted(sorted[i])) {
-
+    if (calculateDailyCompletion(sorted[i]).isFullyCompleted) {
       current++;
-
     } else {
-
       break;
-
     }
-
   }
 
   return {

@@ -1,0 +1,6 @@
+CREATE TABLE IF NOT EXISTS work_time_daily (
+  date VARCHAR(10) PRIMARY KEY,
+  active_seconds INTEGER NOT NULL DEFAULT 0,
+  updated_at TIMESTAMP DEFAULT CURRENT_TIMESTAMP,
+  source VARCHAR(50) DEFAULT 'windows_agent'
+);

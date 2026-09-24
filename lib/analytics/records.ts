@@ -24,13 +24,10 @@ export function generatePersonalRecords(
     },
 
     {
-      title: "Longest Sleep",
-      value: Math.max(
-        0,
-        ...dailyEntries.map(
-          d => d.sleep_hours
-        )
-      ),
+      title: "Total Workouts",
+      value: dailyEntries.filter(
+        d => Boolean(d.workout)
+      ).length,
     },
 
     {
@@ -38,7 +35,7 @@ export function generatePersonalRecords(
       value: Math.max(
         0,
         ...dailyEntries.map(
-          d => d.reading
+          d => d.reading ?? 0
         )
       ),
     },

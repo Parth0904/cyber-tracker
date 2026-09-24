@@ -1,5 +1,6 @@
 import { ActivityRow, DailyEntry } from "@/lib/types";
-import { buildDailyScoreMap } from "@/lib/scoring";
+import { buildDailyScoreMap } from "@/lib/services/metrics/productivity";
+import { calculateDailyCompletion } from "@/lib/services/metrics/completion";
 
 export type Statistics = {
   scoreMap: Record<string, number>;
@@ -53,10 +54,7 @@ export function buildStatistics(
       ? 0
       : Math.round(
           (dailyEntries.filter(
-            (day) =>
-              day.sleep_hours > 0 &&
-              day.bed_time &&
-              day.reading > 0
+            (day) => calculateDailyCompletion(day).isFullyCompleted
           ).length /
             dailyEntries.length) *
             100

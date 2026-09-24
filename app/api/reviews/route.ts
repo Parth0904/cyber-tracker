@@ -1,11 +1,9 @@
 import { NextResponse } from "next/server";
 import { getAllWeeklyReviews } from "@/lib/repositories/weeklyReview";
 import { getAllDailyEntries } from "@/lib/repositories/dailyEntries";
-import { getAllSessions } from "@/lib/repositories/targetSessions";
-import { getAllLearningSessions } from "@/lib/repositories/learning";
+import { getAllWorkTimeDaily } from "@/lib/repositories/workTimeDaily";
 import { generateWeeklyReviewReport, getDatesForWeek, getISOWeekUTC, getISOWeekYearUTC } from "@/lib/services/weeklyReview";
-import { getParentReportConfig } from "@/lib/repositories/parentReport";
-import { formatDateInTimezone } from "@/lib/services/consistency";
+import { APP_TIMEZONE, formatDateInTimezone } from "@/lib/services/metrics/dates";
 
 // GET: Returns lists of all generated and available (can be generated) historical weeks
 export async function GET() {
@@ -13,18 +11,14 @@ export async function GET() {
     const [
       savedReviews,
       dailyEntries,
-      targetSessions,
-      learningSessions,
-      config
+      workRecords
     ] = await Promise.all([
       getAllWeeklyReviews(),
       getAllDailyEntries(),
-      getAllSessions(),
-      getAllLearningSessions(),
-      getParentReportConfig()
+      getAllWorkTimeDaily()
     ]);
 
-    const timezone = config.time_zone || "UTC";
+    const timezone = APP_TIMEZONE;
 
     // Construct a set of all unique year-week combinations in the database
     const availableWeeksSet = new Set<string>();
@@ -44,8 +38,7 @@ export async function GET() {
     };
 
     dailyEntries.forEach(e => addDateToWeeks(e.date));
-    targetSessions.forEach(s => addDateToWeeks(s.started_at));
-    learningSessions.forEach(s => addDateToWeeks(s.started_at));
+    workRecords.forEach(r => addDateToWeeks(r.date));
 
     // Map into lists
     const reviews = Array.from(availableWeeksSet).map(key => {
@@ -99,10 +92,9 @@ export async function GET() {
 // POST: Cron-trigger endpoint to compile the review for the week that just ended
 export async function POST() {
   try {
-    const config = await getParentReportConfig();
-    const timezone = config.time_zone || "UTC";
+    const timezone = APP_TIMEZONE;
 
-    // Resolve current date in target timezone to find the last week
+    // Resolve current date in Asia/Kolkata timezone to find the last week
     const formatter = new Intl.DateTimeFormat("en-US", {
       timeZone: timezone,
       year: "numeric",

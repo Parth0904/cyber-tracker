@@ -6,7 +6,7 @@ Cyber Tracker is a personal operational intelligence system designed for securit
 
 ## 1. Project Overview
 
-Cyber Tracker acts as a personal performance analyst. Rather than a motivational tracking tool, it uses mathematical correlations (e.g. sleep duration vs session length) to outline optimal working patterns and output actionable target rotation recommendations.
+Cyber Tracker acts as a personal performance analyst. Rather than a motivational tracking tool, it uses mathematical correlations (e.g. reading habits vs session duration) to outline optimal working patterns and output actionable target rotation recommendations.
 
 ---
 

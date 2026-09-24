@@ -9,13 +9,14 @@ export type ActivityRow = {
 
 export type DailyEntry = {
   date: string;
-  sleep_hours: number;
-  bed_time: string;
-  wake_time?: string;
-  reading: number;
-  focus_feeling?: string | null;
-  workout: number;
-  steps: number;
   notes: string;
+  focus_feeling?: string | null;
+  steps?: number;
+  // Legacy / historical database fields (preserved for schema compatibility, decoupled from active tracker)
+  reading?: number | null;
+  workout?: number | null;
+  sleep_hours?: number | null;
+  bed_time?: string | null;
+  wake_time?: string | null;
   mobile_screen_time?: number | null;
 };

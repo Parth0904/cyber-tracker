@@ -1,12 +1,14 @@
-import { many } from "@/lib/database";
 import { getAllDailyEntries } from "@/lib/repositories/dailyEntries";
-import { getAllSessions } from "@/lib/repositories/targetSessions";
-import { getAllLearningSessions, getAllTopics } from "@/lib/repositories/learning";
-import { getAllFindings } from "@/lib/repositories/targetFindings";
-import { getAllActivities } from "@/lib/repositories/activities";
-import { calculateConsistency } from "@/lib/services/consistency";
-import { calculateDailyScore } from "@/lib/scoring";
-import { calculateCompletion } from "@/lib/completion";
+import { calculateDailyScore } from "@/lib/services/metrics/productivity";
+import { calculateCompletion } from "@/lib/services/metrics/completion";
+import {
+  APP_TIMEZONE,
+  formatDateInTimezone,
+  getRollingDateRange,
+  getStartOfIsoWeek,
+  getISOWeekUTC,
+  getISOWeekYearUTC,
+} from "@/lib/services/metrics/dates";
 import { getDiagnosticsCache, setDiagnosticsCache } from "@/lib/services/cache";
 
 export type AnalyticsOverview = {
@@ -49,7 +51,6 @@ export type LearningInvestmentRank = {
 
 export type HabitTrendInterval = {
   label: string;
-  averageSleep: number;
   readingCompliance: number; // percentage of days read
   workoutFrequency: number; // percentage of days worked out
   recoveryConsistency: number; // average completion percent
@@ -91,13 +92,9 @@ export type RedesignedAnalyticsResult = {
   growthTimeline: GrowthMilestone[];
   periodComparisons: ProgressComparison[];
   insights: {
-    sleep: any;
     reading: any;
     workout: any;
-    bedTime: any;
-    wakeTime: any;
     learning: any;
-    mobileScreenTime: any;
   };
 };
 
@@ -107,23 +104,13 @@ export async function getCorrelationDiagnostics(): Promise<RedesignedAnalyticsRe
     return cached.data;
   }
 
-  const [
-    dailyEntries,
-    targetSessions,
-    learningSessions,
-    targetFindings,
-    activities,
-    targets,
-    topics
-  ] = await Promise.all([
-    getAllDailyEntries(),
-    getAllSessions(),
-    getAllLearningSessions(),
-    getAllFindings(),
-    getAllActivities(),
-    many<any>("SELECT * FROM targets"),
-    getAllTopics()
-  ]);
+  const dailyEntries = await getAllDailyEntries();
+  const targetSessions: any[] = [];
+  const learningSessions: any[] = [];
+  const targetFindings: any[] = [];
+  const activities: any[] = [];
+  const targets: any[] = [];
+  const topics: any[] = [];
 
   const completedTargetSessions = targetSessions.filter(s => s.ended_at !== null);
   const completedLearningSessions = learningSessions.filter(s => s.ended_at !== null);
@@ -142,7 +129,7 @@ export async function getCorrelationDiagnostics(): Promise<RedesignedAnalyticsRe
   const datesSet = new Set<string>();
   dailyEntries.forEach(e => datesSet.add(e.date));
   activities.forEach(a => datesSet.add(a.date));
-  targetSessions.forEach(s => { if (s.started_at) datesSet.add(s.started_at.split("T")[0]); });
+  targetSessions.forEach(s => { if (s.started_at) datesSet.add(formatDateInTimezone(s.started_at, APP_TIMEZONE)); });
 
   datesSet.forEach(dateStr => {
     const dayActs = activities.filter(a => a.date === dateStr);
@@ -151,9 +138,9 @@ export async function getCorrelationDiagnostics(): Promise<RedesignedAnalyticsRe
 
   // --- 1. OVERVIEW ---
   const totalProductivityScore = Object.values(dailyScores).reduce((a, b) => a + b, 0);
-  const totalLearningBlocks = completedLearningSessions.length + activities.filter(a => a.type === "learning").reduce((acc, a) => acc + a.count, 0);
+  const totalLearningBlocks = completedLearningSessions.length;
   const totalBugReportStudyBlocks = activities.filter(a => a.type === "bug_report").reduce((acc, a) => acc + a.count, 0);
-  const totalReconSessions = completedTargetSessions.filter(s => s.type === "Recon").length + activities.filter(a => a.type === "recon").length;
+  const totalReconSessions = completedTargetSessions.filter(s => s.type === "Recon").length;
   const totalTargetsTested = new Set(completedTargetSessions.map(s => s.target_id)).size;
   const totalFindings = targetFindings.length;
   const activeTargets = targets.length;
@@ -172,13 +159,11 @@ export async function getCorrelationDiagnostics(): Promise<RedesignedAnalyticsRe
 
   // Helper to compile allocation metrics for a range of dates
   const buildAllocationForDates = (dates: string[], label: string): AllocationInterval => {
-    const dayLearning = completedLearningSessions.filter(s => dates.includes(s.started_at?.split("T")[0])).length +
-                        activities.filter(a => dates.includes(a.date) && a.type === "learning").reduce((acc, a) => acc + a.count, 0);
+    const dayLearning = completedLearningSessions.filter(s => s.started_at && dates.includes(formatDateInTimezone(s.started_at, APP_TIMEZONE))).length;
     const dayBugReport = activities.filter(a => dates.includes(a.date) && a.type === "bug_report").reduce((acc, a) => acc + a.count, 0);
-    const dayRecon = completedTargetSessions.filter(s => s.type === "Recon" && dates.includes(s.started_at?.split("T")[0])).length +
-                      activities.filter(a => dates.includes(a.date) && a.type === "recon").reduce((acc, a) => acc + a.count, 0);
-    const dayTargets = new Set(completedTargetSessions.filter(s => dates.includes(s.started_at?.split("T")[0])).map(s => s.target_id)).size;
-    const dayFindings = targetFindings.filter(f => f.submitted_at && dates.includes(f.submitted_at)).length;
+    const dayRecon = completedTargetSessions.filter(s => s.type === "Recon" && s.started_at && dates.includes(formatDateInTimezone(s.started_at, APP_TIMEZONE))).length;
+    const dayTargets = new Set(completedTargetSessions.filter(s => s.started_at && dates.includes(formatDateInTimezone(s.started_at, APP_TIMEZONE))).map(s => s.target_id)).size;
+    const dayFindings = targetFindings.filter(f => f.submitted_at && dates.includes(formatDateInTimezone(f.submitted_at, APP_TIMEZONE))).length;
 
     return {
       label,
@@ -193,37 +178,26 @@ export async function getCorrelationDiagnostics(): Promise<RedesignedAnalyticsRe
   // --- 2. EFFORT ALLOCATION ---
   // A. Daily (Last 30 Calendar Days)
   const daily: AllocationInterval[] = [];
-  for (let i = 29; i >= 0; i--) {
-    const d = new Date();
-    d.setDate(d.getDate() - i);
-    const dateStr = d.toISOString().split("T")[0];
+  const rolling30 = getRollingDateRange(30, APP_TIMEZONE).dates;
+  for (const dateStr of rolling30) {
     daily.push(buildAllocationForDates([dateStr], dateStr.slice(5))); // MM-DD
-  }
-
-  // Helper for Start of ISO Week (Monday Start)
-  function getStartOfWeek(date: Date): Date {
-    const d = new Date(date);
-    const day = d.getDay();
-    const diff = d.getDate() - day + (day === 0 ? -6 : 1);
-    return new Date(d.setDate(diff));
   }
 
   // B. Weekly (Last 12 Weeks)
   const weekly: AllocationInterval[] = [];
-  const startOfWeekTracker = getStartOfWeek(new Date());
+  const startOfWeekTracker = getStartOfIsoWeek(new Date(), APP_TIMEZONE);
   for (let i = 11; i >= 0; i--) {
-    const d = new Date(startOfWeekTracker);
-    d.setDate(d.getDate() - i * 7);
+    const d = new Date(startOfWeekTracker.getTime() - i * 7 * 24 * 60 * 60 * 1000);
     
     // Compile all dates in this week
     const weekDates: string[] = [];
     for (let o = 0; o < 7; o++) {
-      const wd = new Date(d);
-      wd.setDate(wd.getDate() + o);
-      weekDates.push(wd.toISOString().split("T")[0]);
+      const wd = new Date(d.getTime() + o * 24 * 60 * 60 * 1000);
+      weekDates.push(formatDateInTimezone(wd, APP_TIMEZONE));
     }
-    const label = `${d.getMonth() + 1}/${d.getDate()}`;
-    weekly.push(buildAllocationForDates(weekDates, `Wk of ${label}`));
+    const labelDateStr = formatDateInTimezone(d, APP_TIMEZONE);
+    const [, m, day] = labelDateStr.split("-");
+    weekly.push(buildAllocationForDates(weekDates, `Wk of ${parseInt(m, 10)}/${parseInt(day, 10)}`));
   }
 
   // C. Monthly (Last 12 Months)
@@ -256,10 +230,8 @@ export async function getCorrelationDiagnostics(): Promise<RedesignedAnalyticsRe
     const yearDates: string[] = [];
     const isLeap = (year % 4 === 0 && year % 100 !== 0) || year % 400 === 0;
     const days = isLeap ? 366 : 365;
-    const d = new Date(year, 0, 1);
     for (let day = 0; day < days; day++) {
-      const wd = new Date(d);
-      wd.setDate(wd.getDate() + day);
+      const wd = new Date(Date.UTC(year, 0, 1 + day));
       yearDates.push(wd.toISOString().split("T")[0]);
     }
     return buildAllocationForDates(yearDates, String(year));
@@ -307,8 +279,7 @@ export async function getCorrelationDiagnostics(): Promise<RedesignedAnalyticsRe
 
     // Study Frequency Weeks (count of unique ISO weeks this topic was studied)
     const weeksStudied = new Set(tpSessions.map(s => {
-      const sd = new Date(s.started_at);
-      return `${getISOWeekYear(sd)}-W${getISOWeek(sd)}`;
+      return `${getISOWeekYearUTC(s.started_at, APP_TIMEZONE)}-W${getISOWeekUTC(s.started_at, APP_TIMEZONE)}`;
     }));
 
     return {
@@ -344,17 +315,8 @@ export async function getCorrelationDiagnostics(): Promise<RedesignedAnalyticsRe
     const monthEntries = dailyEntries.filter(e => monthDates.includes(e.date));
     const monthScores = Object.entries(dailyScores).filter(([date]) => monthDates.includes(date)).map(([_, s]) => s);
     
-    const avgSleep = monthEntries.length > 0 
-      ? monthEntries.reduce((acc, e) => acc + (e.sleep_hours || 0), 0) / monthEntries.length 
-      : 0;
-
-    const readingCompliance = monthEntries.length > 0 
-      ? (monthEntries.filter(e => e.reading === 1).length / monthEntries.length) * 100 
-      : 0;
-
-    const workoutFrequency = monthEntries.length > 0 
-      ? (monthEntries.filter(e => e.workout === 1).length / monthEntries.length) * 100 
-      : 0;
+    const readingCompliance = 0;
+    const workoutFrequency = 0;
 
     const recoveryConsistency = monthEntries.length > 0
       ? monthEntries.reduce((acc, e) => acc + calculateCompletion(e).percent, 0) / monthEntries.length
@@ -370,7 +332,6 @@ export async function getCorrelationDiagnostics(): Promise<RedesignedAnalyticsRe
     const label = d.toLocaleString("default", { month: "short", year: "numeric" });
     habitTrends.push({
       label,
-      averageSleep: Math.round(avgSleep * 10) / 10,
       readingCompliance: Math.round(readingCompliance),
       workoutFrequency: Math.round(workoutFrequency),
       recoveryConsistency: Math.round(recoveryConsistency),
@@ -396,8 +357,7 @@ export async function getCorrelationDiagnostics(): Promise<RedesignedAnalyticsRe
     // B. Highest Productivity Week
     const weeklyScores: Record<string, number> = {};
     Object.entries(dailyScores).forEach(([dateStr, s]) => {
-      const d = new Date(dateStr);
-      const wkKey = `${getISOWeekYear(d)}-W${getISOWeek(d)}`;
+      const wkKey = `${getISOWeekYearUTC(dateStr)}-W${getISOWeekUTC(dateStr)}`;
       weeklyScores[wkKey] = (weeklyScores[wkKey] || 0) + s;
     });
     const sortedWeeks = Object.entries(weeklyScores).sort((a, b) => b[1] - a[1]);
@@ -525,8 +485,7 @@ export async function getCorrelationDiagnostics(): Promise<RedesignedAnalyticsRe
 
   // E. 10 Weeks Tracked
   const uniqueWeeksTracked = new Set(dailyEntries.map(e => {
-    const d = new Date(e.date);
-    return `${getISOWeekYear(d)}-W${getISOWeek(d)}`;
+    return `${getISOWeekYearUTC(e.date, APP_TIMEZONE)}-W${getISOWeekUTC(e.date, APP_TIMEZONE)}`;
   }));
   growthTimeline.push({
     name: "10 Weeks Tracked",
@@ -643,18 +602,20 @@ export async function getCorrelationDiagnostics(): Promise<RedesignedAnalyticsRe
   // ==========================================
   const getHuntingHoursOnDates = (dates: string[]) => {
     return completedTargetSessions
-      .filter(s => s.started_at && dates.includes(s.started_at.split("T")[0]))
+      .filter(s => s.started_at && dates.includes(formatDateInTimezone(s.started_at, APP_TIMEZONE)))
       .reduce((acc, s) => acc + (s.duration || 0), 0) / 60;
   };
 
   const getLearningHoursOnDates = (dates: string[]) => {
     return completedLearningSessions
-      .filter(s => s.started_at && dates.includes(s.started_at.split("T")[0]))
+      .filter(s => s.started_at && dates.includes(formatDateInTimezone(s.started_at, APP_TIMEZONE)))
       .reduce((acc, s) => acc + (s.duration || 0), 0) / 60;
   };
 
   const getAvgSessionLengthOnDates = (dates: string[]) => {
-    const matchingSessions = completedTargetSessions.filter(s => s.started_at && dates.includes(s.started_at.split("T")[0]));
+    const matchingSessions = completedTargetSessions.filter(
+      s => s.started_at && dates.includes(formatDateInTimezone(s.started_at, APP_TIMEZONE))
+    );
     if (matchingSessions.length === 0) return 0;
     const totalMinutes = matchingSessions.reduce((acc, s) => acc + (s.duration || 0), 0);
     return (totalMinutes / matchingSessions.length) / 60;
@@ -669,13 +630,6 @@ export async function getCorrelationDiagnostics(): Promise<RedesignedAnalyticsRe
     return totalCompletion / matchingEntries.length;
   };
 
-  function parseTimeToMinutes(timeStr: string | null | undefined): number | null {
-    if (!timeStr) return null;
-    const [h, m] = timeStr.split(":").map(Number);
-    if (isNaN(h) || isNaN(m)) return null;
-    return h * 60 + m;
-  }
-
   function getConfidenceRating(sampleSize: number): "High" | "Medium" | "Low" {
     if (sampleSize >= 14) return "High";
     if (sampleSize >= 6) return "Medium";
@@ -687,24 +641,7 @@ export async function getCorrelationDiagnostics(): Promise<RedesignedAnalyticsRe
     return ranges.some(r => time >= r.start && time <= r.end);
   }
 
-  // 1. Sleep Insight
-  const sleep7_8Dates = dailyEntries.filter(e => e.sleep_hours !== null && e.sleep_hours >= 7 && e.sleep_hours <= 8).map(e => e.date);
-  const sleepUnder6Dates = dailyEntries.filter(e => e.sleep_hours !== null && e.sleep_hours < 6).map(e => e.date);
-  
-  let sleepInsight: any = { status: "insufficient_data" };
-  if (dailyEntries.length >= 5 && sleep7_8Dates.length >= 2 && sleepUnder6Dates.length >= 2) {
-    const avgHunting7_8 = getHuntingHoursOnDates(sleep7_8Dates) / sleep7_8Dates.length;
-    const avgHuntingUnder6 = getHuntingHoursOnDates(sleepUnder6Dates) / sleepUnder6Dates.length;
-    sleepInsight = {
-      status: "success",
-      confidence: getConfidenceRating(sleep7_8Dates.length + sleepUnder6Dates.length),
-      avgHunting7_8: Math.round(avgHunting7_8 * 10) / 10,
-      avgHuntingUnder6: Math.round(avgHuntingUnder6 * 10) / 10,
-      impact: Math.round((avgHunting7_8 - avgHuntingUnder6) * 10) / 10,
-    };
-  }
-
-  // 2. Reading Insight
+  // 1. Reading Insight
   const readingDates = dailyEntries.filter(e => e.reading === 1).map(e => e.date);
   const nonReadingDates = dailyEntries.filter(e => e.reading === 0).map(e => e.date);
 
@@ -733,7 +670,7 @@ export async function getCorrelationDiagnostics(): Promise<RedesignedAnalyticsRe
     };
   }
 
-  // 3. Workout Insight
+  // 2. Workout Insight
   const workoutDatesList = dailyEntries.filter(e => e.workout === 1).map(e => e.date);
   const noWorkoutDatesList = dailyEntries.filter(e => e.workout === 0).map(e => e.date);
 
@@ -762,83 +699,16 @@ export async function getCorrelationDiagnostics(): Promise<RedesignedAnalyticsRe
     };
   }
 
-  // 4. Bed Time Insight
-  const bedTimeMinutesList = dailyEntries
-    .map(e => ({ date: e.date, minutes: parseTimeToMinutes(e.bed_time) }))
-    .filter(item => item.minutes !== null);
-
-  const before11Dates = bedTimeMinutesList.filter(item => item.minutes! < 23 * 60).map(item => item.date);
-  const between11and12Dates = bedTimeMinutesList.filter(item => item.minutes! >= 23 * 60 && item.minutes! < 24 * 60).map(item => item.date);
-  const afterMidnightDates = bedTimeMinutesList.filter(item => item.minutes! >= 0 && item.minutes! < 6 * 60).map(item => item.date);
-
-  let bedTimeInsight: any = { status: "insufficient_data" };
-  const groupsWithObservations = [before11Dates.length, between11and12Dates.length, afterMidnightDates.length].filter(len => len >= 2).length;
-  if (dailyEntries.length >= 5 && groupsWithObservations >= 2) {
-    const avgHuntingBefore11 = before11Dates.length > 0 ? (getHuntingHoursOnDates(before11Dates) / before11Dates.length) : 0;
-    const avgHunting11to12 = between11and12Dates.length > 0 ? (getHuntingHoursOnDates(between11and12Dates) / between11and12Dates.length) : 0;
-    const avgHuntingAfterMidnight = afterMidnightDates.length > 0 ? (getHuntingHoursOnDates(afterMidnightDates) / afterMidnightDates.length) : 0;
-
-    bedTimeInsight = {
-      status: "success",
-      confidence: getConfidenceRating(bedTimeMinutesList.length),
-      avgHuntingBefore11: Math.round(avgHuntingBefore11 * 10) / 10,
-      avgHunting11to12: Math.round(avgHunting11to12 * 10) / 10,
-      avgHuntingAfterMidnight: Math.round(avgHuntingAfterMidnight * 10) / 10,
-    };
-  }
-
-  // 5. Wake Time Insight
-  const wakeTimeMinutesList = dailyEntries
-    .map(e => ({ date: e.date, minutes: parseTimeToMinutes(e.wake_time) }))
-    .filter(item => item.minutes !== null);
-
-  let wakeTimeInsight: any = { status: "insufficient_data" };
-  if (dailyEntries.length >= 5 && wakeTimeMinutesList.length >= 4) {
-    const sortedMinutes = [...wakeTimeMinutesList].map(i => i.minutes!).sort((a, b) => a - b);
-    const mid = Math.floor(sortedMinutes.length / 2);
-    const medianMinutes = sortedMinutes.length % 2 !== 0 ? sortedMinutes[mid] : (sortedMinutes[mid - 1] + sortedMinutes[mid]) / 2;
-
-    const earlyWakeDates = wakeTimeMinutesList.filter(i => i.minutes! < medianMinutes).map(i => i.date);
-    const lateWakeDates = wakeTimeMinutesList.filter(i => i.minutes! >= medianMinutes).map(i => i.date);
-
-    if (earlyWakeDates.length >= 2 && lateWakeDates.length >= 2) {
-      const avgHuntingEarly = getHuntingHoursOnDates(earlyWakeDates) / earlyWakeDates.length;
-      const avgHuntingLate = getHuntingHoursOnDates(lateWakeDates) / lateWakeDates.length;
-      const avgLearningEarly = getLearningHoursOnDates(earlyWakeDates) / earlyWakeDates.length;
-      const avgLearningLate = getLearningHoursOnDates(lateWakeDates) / lateWakeDates.length;
-      const avgConsistencyEarly = getAvgCompletionOnDates(earlyWakeDates);
-      const avgConsistencyLate = getAvgCompletionOnDates(lateWakeDates);
-
-      const medianHours = Math.floor(medianMinutes / 60);
-      const medianMins = Math.round(medianMinutes % 60);
-      const medianLabel = `${String(medianHours).padStart(2, "0")}:${String(medianMins).padStart(2, "0")}`;
-
-      wakeTimeInsight = {
-        status: "success",
-        confidence: getConfidenceRating(wakeTimeMinutesList.length),
-        medianWakeTime: medianLabel,
-        earlyWake: {
-          avgHunting: Math.round(avgHuntingEarly * 10) / 10,
-          avgLearning: Math.round(avgLearningEarly * 10) / 10,
-          avgConsistency: Math.round(avgConsistencyEarly),
-        },
-        lateWake: {
-          avgHunting: Math.round(avgHuntingLate * 10) / 10,
-          avgLearning: Math.round(avgLearningLate * 10) / 10,
-          avgConsistency: Math.round(avgConsistencyLate),
-        },
-      };
-    }
-  }
-
-  // 6. Learning Topics Attributed Outputs
+  // 3. Learning Topics Attributed Outputs
   let learningInsight: any = { status: "insufficient_data" };
   const studiedTopics = topics.map(tp => {
     const tpSessions = completedLearningSessions.filter(s => s.topic_id === tp.id);
     if (tpSessions.length === 0) return null;
 
     const ranges = tpSessions.map(s => {
-      const start = new Date(s.started_at.split("T")[0] + "T00:00:00Z").getTime();
+      const sessionDateStr = formatDateInTimezone(s.started_at, APP_TIMEZONE);
+      const [y, m, d] = sessionDateStr.split("-").map(Number);
+      const start = Date.UTC(y, m - 1, d);
       const end = start + 6 * 24 * 60 * 60 * 1000 + 23 * 3600 * 1000 + 59 * 60 * 1000;
       return { start, end };
     });
@@ -885,58 +755,10 @@ export async function getCorrelationDiagnostics(): Promise<RedesignedAnalyticsRe
     };
   }
 
-  // 7. Mobile Screen Time Insight
-  const lowScreenDates = dailyEntries.filter(e => e.mobile_screen_time !== null && e.mobile_screen_time !== undefined && e.mobile_screen_time < 120).map(e => e.date);
-  const highScreenDates = dailyEntries.filter(e => e.mobile_screen_time !== null && e.mobile_screen_time !== undefined && e.mobile_screen_time >= 120).map(e => e.date);
-
-  let mobileScreenTimeInsight: any = { status: "insufficient_data" };
-  if (dailyEntries.length >= 5 && lowScreenDates.length >= 2 && highScreenDates.length >= 2) {
-    const avgHuntingLow = getHuntingHoursOnDates(lowScreenDates) / lowScreenDates.length;
-    const avgHuntingHigh = getHuntingHoursOnDates(highScreenDates) / highScreenDates.length;
-    const avgLearningLow = getLearningHoursOnDates(lowScreenDates) / lowScreenDates.length;
-    const avgLearningHigh = getLearningHoursOnDates(highScreenDates) / highScreenDates.length;
-    const readingLowCount = dailyEntries.filter(e => lowScreenDates.includes(e.date) && e.reading === 1).length;
-    const readingLowPct = (readingLowCount / lowScreenDates.length) * 100;
-    const readingHighCount = dailyEntries.filter(e => highScreenDates.includes(e.date) && e.reading === 1).length;
-    const readingHighPct = (readingHighCount / highScreenDates.length) * 100;
-    const sleepHoursLow = dailyEntries.filter(e => lowScreenDates.includes(e.date)).reduce((acc, e) => acc + (e.sleep_hours || 0), 0) / lowScreenDates.length;
-    const sleepHoursHigh = dailyEntries.filter(e => highScreenDates.includes(e.date)).reduce((acc, e) => acc + (e.sleep_hours || 0), 0) / highScreenDates.length;
-    const consistencyLow = getAvgCompletionOnDates(lowScreenDates);
-    const consistencyHigh = getAvgCompletionOnDates(highScreenDates);
-    const reportsLow = targetFindings.filter(f => lowScreenDates.includes(f.submitted_at)).length / lowScreenDates.length;
-    const reportsHigh = targetFindings.filter(f => highScreenDates.includes(f.submitted_at)).length / highScreenDates.length;
-
-    mobileScreenTimeInsight = {
-      status: "success",
-      confidence: getConfidenceRating(lowScreenDates.length + highScreenDates.length),
-      lowScreen: {
-        bgHunting: Math.round(avgHuntingLow * 10) / 10,
-        avgHunting: Math.round(avgHuntingLow * 10) / 10,
-        avgLearning: Math.round(avgLearningLow * 10) / 10,
-        readingPct: Math.round(readingLowPct),
-        avgSleep: Math.round(sleepHoursLow * 10) / 10,
-        avgConsistency: Math.round(consistencyLow),
-        avgReports: Math.round(reportsLow * 100) / 100,
-      },
-      highScreen: {
-        avgHunting: Math.round(avgHuntingHigh * 10) / 10,
-        avgLearning: Math.round(avgLearningHigh * 10) / 10,
-        readingPct: Math.round(readingHighPct),
-        avgSleep: Math.round(sleepHoursHigh * 10) / 10,
-        avgConsistency: Math.round(consistencyHigh),
-        avgReports: Math.round(reportsHigh * 100) / 100,
-      }
-    };
-  }
-
   const insights = {
-    sleep: sleepInsight,
     reading: readingInsight,
     workout: workoutInsight,
-    bedTime: bedTimeInsight,
-    wakeTime: wakeTimeInsight,
     learning: learningInsight,
-    mobileScreenTime: mobileScreenTimeInsight
   };
 
   const result = {
@@ -957,19 +779,4 @@ export async function getCorrelationDiagnostics(): Promise<RedesignedAnalyticsRe
   };
   setDiagnosticsCache(result);
   return result;
-}
-
-// Helpers for ISO Weeks
-function getISOWeek(d: Date) {
-  const date = new Date(d.getTime());
-  date.setHours(0, 0, 0, 0);
-  date.setDate(date.getDate() + 3 - ((date.getDay() + 6) % 7));
-  const week1 = new Date(date.getFullYear(), 0, 4);
-  return 1 + Math.round(((date.getTime() - week1.getTime()) / 86400000 - 3 + ((week1.getDay() + 6) % 7)) / 7);
-}
-
-function getISOWeekYear(d: Date) {
-  const date = new Date(d.getTime());
-  date.setDate(date.getDate() + 3 - ((date.getDay() + 6) % 7));
-  return date.getFullYear();
 }

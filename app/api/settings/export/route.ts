@@ -1,10 +1,7 @@
 import { NextResponse } from "next/server";
 import { getAllDailyEntries } from "@/lib/repositories/dailyEntries";
-import { getAllTargetsWithArchived } from "@/lib/repositories/targets";
-import { getAllSessions } from "@/lib/repositories/targetSessions";
-import { getAllFindings } from "@/lib/repositories/targetFindings";
-import { getAllTopics, getAllLearningSessions } from "@/lib/repositories/learning";
-import { getAllActivities } from "@/lib/repositories/activities";
+import { getAllWorkTimeDaily } from "@/lib/repositories/workTimeDaily";
+import { APP_TIMEZONE, getTodayDateString } from "@/lib/services/metrics/dates";
 
 export async function GET(req: Request) {
   const { searchParams } = new URL(req.url);
@@ -13,33 +10,18 @@ export async function GET(req: Request) {
   try {
     const [
       dailyEntries,
-      targets,
-      sessions,
-      findings,
-      topics,
-      learningSessions,
-      activities,
+      workTimeDaily,
     ] = await Promise.all([
       getAllDailyEntries(),
-      getAllTargetsWithArchived(),
-      getAllSessions(),
-      getAllFindings(),
-      getAllTopics(),
-      getAllLearningSessions(),
-      getAllActivities(),
+      getAllWorkTimeDaily(),
     ]);
 
     const backup = {
-      version: "1.5",
+      version: "2.0",
       exportedAt: new Date().toISOString(),
       data: {
         dailyEntries,
-        targets,
-        sessions,
-        findings,
-        topics,
-        learningSessions,
-        activities,
+        workTimeDaily,
       },
     };
 
@@ -63,7 +45,7 @@ export async function GET(req: Request) {
       return new Response(csvLines.join("\n"), {
         headers: {
           "Content-Type": "text/csv; charset=utf-8",
-          "Content-Disposition": `attachment; filename="cyber-tracker-export-${new Date().toISOString().split("T")[0]}.csv"`,
+          "Content-Disposition": `attachment; filename="cyber-tracker-export-${getTodayDateString(APP_TIMEZONE)}.csv"`,
         },
       });
     }
@@ -73,7 +55,7 @@ export async function GET(req: Request) {
     return new Response(jsonStr, {
       headers: {
         "Content-Type": "application/json; charset=utf-8",
-        "Content-Disposition": `attachment; filename="cyber-tracker-backup-${new Date().toISOString().split("T")[0]}.json"`,
+        "Content-Disposition": `attachment; filename="cyber-tracker-backup-${getTodayDateString(APP_TIMEZONE)}.json"`,
       },
     });
   } catch (err) {

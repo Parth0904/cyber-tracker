@@ -149,6 +149,13 @@ CREATE TABLE IF NOT EXISTS parent_report_log (
   error_message TEXT,
   UNIQUE(year, week_number)
 );
+
+CREATE TABLE IF NOT EXISTS work_time_daily (
+  date VARCHAR(10) PRIMARY KEY,
+  active_seconds INTEGER NOT NULL DEFAULT 0,
+  updated_at TIMESTAMP DEFAULT CURRENT_TIMESTAMP,
+  source VARCHAR(50) DEFAULT 'windows_agent'
+);
 `;
 
 async function main() {
@@ -158,6 +165,14 @@ async function main() {
     await pool.query("ALTER TABLE daily_entries ADD COLUMN IF NOT EXISTS mobile_screen_time INTEGER;");
     await pool.query("ALTER TABLE target_sessions ADD COLUMN IF NOT EXISTS last_active_at VARCHAR(50);");
     await pool.query("DROP TABLE IF EXISTS health_connect_config;");
+    await pool.query(`
+      CREATE TABLE IF NOT EXISTS work_time_daily (
+        date VARCHAR(10) PRIMARY KEY,
+        active_seconds INTEGER NOT NULL DEFAULT 0,
+        updated_at TIMESTAMP DEFAULT CURRENT_TIMESTAMP,
+        source VARCHAR(50) DEFAULT 'windows_agent'
+      );
+    `);
     console.log("PostgreSQL Database schema initialized successfully.");
   } catch (err) {
     console.error("Failed to initialize PostgreSQL Database schema:", err);

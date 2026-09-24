@@ -20,7 +20,6 @@ export type ParentReportData = {
   validReports: number;
 
   // Healthy Habits
-  averageSleep: number;
   workoutDays: number;
   readingBeforeBedDays: number;
 

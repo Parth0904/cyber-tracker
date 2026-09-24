@@ -41,3 +41,7 @@ yarn-error.log*
 next-env.d.ts
 
 tracker.db
+
+# windows agent local data & logs
+agent/data/
+agent/logs/

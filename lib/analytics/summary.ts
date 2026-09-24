@@ -7,7 +7,8 @@ import {
 } from "./statistics";
 
 export function generateSummary(
-  statistics: Statistics
+  statistics: Statistics,
+  canonicalConsistency = 0
 ): AnalyticsSummary {
 
   const bestDay =
@@ -19,31 +20,7 @@ export function generateSummary(
         statistics.highestScore
     )?.[0] ?? "";
 
-  const variance =
-    statistics.scores.reduce(
-      (sum, score) =>
-        sum +
-        Math.pow(
-          score -
-            statistics.averageScore,
-          2
-        ),
-      0
-    ) /
-    Math.max(
-      statistics.scores.length,
-      1
-    );
-
-  const consistency =
-    Math.max(
-      0,
-      Math.round(
-        100 -
-          Math.sqrt(variance) *
-            10
-      )
-    );
+  const consistency = canonicalConsistency;
 
   return {
     averageScore: Number(

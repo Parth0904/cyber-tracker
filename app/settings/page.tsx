@@ -11,9 +11,9 @@ import {
   Loader2,
   Check,
   LogOut,
-  Mail,
 } from "lucide-react";
 import { useRouter } from "next/navigation";
+import { APP_TIMEZONE, getTodayDateString } from "@/lib/services/metrics/dates";
 
 export default function SettingsPage() {
   const router = useRouter();
@@ -26,7 +26,7 @@ export default function SettingsPage() {
     parent_name: "",
     delivery_method: "Email",
     delivery_time: "20:00",
-    time_zone: "UTC",
+    time_zone: APP_TIMEZONE,
     email_address: "",
     telegram_chat_id: "",
   });
@@ -112,7 +112,7 @@ export default function SettingsPage() {
       const a = document.createElement("a");
       a.href = url;
       const ext = format === "json" ? "json" : "csv";
-      a.download = `cyber-tracker-export-${new Date().toISOString().split("T")[0]}.${ext}`;
+      a.download = `cyber-tracker-export-${getTodayDateString(APP_TIMEZONE)}.${ext}`;
       document.body.appendChild(a);
       a.click();
       document.body.removeChild(a);
@@ -139,7 +139,7 @@ export default function SettingsPage() {
         const url = URL.createObjectURL(blob);
         const a = document.createElement("a");
         a.href = url;
-        a.download = `cyber-tracker-backup-${new Date().toISOString().split("T")[0]}.json`;
+        a.download = `cyber-tracker-backup-${getTodayDateString(APP_TIMEZONE)}.json`;
         document.body.appendChild(a);
         a.click();
         document.body.removeChild(a);

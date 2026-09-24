@@ -1,6 +1,7 @@
 import { NextRequest, NextResponse } from "next/server";
 import { getWeeklyReview } from "@/lib/repositories/weeklyReview";
 import { generateWeeklyReviewReport } from "@/lib/services/weeklyReview";
+import { APP_TIMEZONE, getTodayDateString } from "@/lib/services/metrics/dates";
 
 type RouteParams = {
   params: Promise<{
@@ -114,15 +115,9 @@ ${report.discoveries.map((d: any) => `- **Observation**: ${d.text}\n  *Confidenc
 
 ---
 
-## 7. Habit Review
-- **Reading days**: ${report.habitReview.readingDays} days (change vs prev week: ${report.habitReview.readingDaysDiffPrev >= 0 ? `+${report.habitReview.readingDaysDiffPrev}` : report.habitReview.readingDaysDiffPrev}d, vs 30d: ${report.habitReview.readingDaysDiff30d >= 0 ? `+${report.habitReview.readingDaysDiff30d}` : report.habitReview.readingDaysDiff30d}d)
-- **Workouts**: ${report.habitReview.workoutCount} sessions (change vs prev week: ${report.habitReview.workoutCountDiffPrev >= 0 ? `+${report.habitReview.workoutCountDiffPrev}` : report.habitReview.workoutCountDiffPrev} sessions, vs 30d: ${report.habitReview.workoutCountDiff30d >= 0 ? `+${report.habitReview.workoutCountDiff30d}` : report.habitReview.workoutCountDiff30d} sessions)
-- **Average Sleep hours**: ${report.habitReview.avgSleepHours.toFixed(1)}h (change vs prev week: ${report.habitReview.avgSleepHoursDiffPrev >= 0 ? `+${report.habitReview.avgSleepHoursDiffPrev}` : report.habitReview.avgSleepHoursDiffPrev}h, vs 30d: ${report.habitReview.avgSleepHoursDiff30d >= 0 ? `+${report.habitReview.avgSleepHoursDiff30d}` : report.habitReview.avgSleepHoursDiff30d}h)
-- **Averaged Bedtime**: ${report.habitReview.avgBedTime}
-- **Averaged Wake Time**: ${report.habitReview.avgWakeTime}
-- **Average Mobile Screen Time**: ${report.habitReview.avgMobileScreenTime}m (change vs prev week: ${report.habitReview.avgMobileScreenTimeDiffPrev >= 0 ? `+${report.habitReview.avgMobileScreenTimeDiffPrev}` : report.habitReview.avgMobileScreenTimeDiffPrev}m, vs 30d: ${report.habitReview.avgMobileScreenTimeDiff30d >= 0 ? `+${report.habitReview.avgMobileScreenTimeDiff30d}` : report.habitReview.avgMobileScreenTimeDiff30d}m)
-- **Habit Completion Rate**: ${report.habitReview.completionRate}%
-- **Habit Consistency Score**: ${report.habitReview.consistencyScore}%
+## 7. Habit & Operational Review
+- **Execution Completion Rate**: ${report.habitReview.completionRate}%
+- **Operational Consistency Score**: ${report.habitReview.consistencyScore}%
 
 ---
 
@@ -144,7 +139,7 @@ ${report.recommendations.map((r: any) => `- ${r}`).join("\n") || "No data-driven
 
 ---
 
-*Report compiled on: ${new Date().toISOString().split("T")[0]}. Powered by Cyber Tracker intelligence system.*
+*Report compiled on: ${getTodayDateString(APP_TIMEZONE)}. Powered by Cyber Tracker intelligence system.*
 `;
 
     return new Response(md, {

@@ -194,6 +194,84 @@ export default function WeeklyReviewPage() {
             </div>
           </Panel>
 
+          {/* 5-DAY WORKWEEK CORE EXECUTION & RECOVERY PANEL */}
+          {report.work && (
+            <Panel className="space-y-4 print:border-2 print:border-black print:p-4">
+              <div className="border-b border-border-subtle pb-3 flex justify-between items-center print:border-b-2 print:border-black">
+                <h2 className="text-xs font-mono font-bold text-white print:text-black uppercase flex items-center gap-2">
+                  <Target className="w-4 h-4 text-accent-cyan print:hidden" /> 5-Day Workweek Execution & Recovery
+                </h2>
+                <div className="flex items-center gap-2">
+                  <span className={`inline-flex items-center px-2 py-0.5 rounded font-mono font-bold text-[9px] uppercase border
+                    ${report.performance?.classification === "GREEN" ? "bg-success-emerald/10 border-success-emerald/25 text-success-emerald" :
+                      report.performance?.classification === "YELLOW" ? "bg-warning-amber/10 border-warning-amber/25 text-warning-amber" :
+                      "bg-danger-rose/10 border-danger-rose/25 text-danger-rose"}`}>
+                    {report.performance?.classification || "EVALUATED"}
+                  </span>
+                </div>
+              </div>
+
+              <div className="grid grid-cols-2 sm:grid-cols-4 gap-3 text-zinc-400 print:text-black">
+                <div className="bg-zinc-950/40 p-3 rounded border border-border-subtle/50">
+                  <span className="text-[9px] uppercase text-zinc-500 block font-bold">Total Work / 40h</span>
+                  <span className="text-white font-bold text-sm block mt-0.5">{report.work.totalProductiveHours}h</span>
+                  <span className="text-[8px] text-zinc-500 block mt-1 uppercase">Target: 40.0h</span>
+                </div>
+
+                <div className="bg-zinc-950/40 p-3 rounded border border-border-subtle/50">
+                  <span className="text-[9px] uppercase text-zinc-500 block font-bold">Workday Average</span>
+                  <span className="text-white font-bold text-sm block mt-0.5">{report.work.averageWorkdayHours}h/day</span>
+                  <span className="text-[8px] text-zinc-500 block mt-1 uppercase">Ideal: 8.0h/day</span>
+                </div>
+
+                <div className="bg-zinc-950/40 p-3 rounded border border-border-subtle/50">
+                  <span className="text-[9px] uppercase text-zinc-500 block font-bold">Completion</span>
+                  <span className="text-white font-bold text-sm block mt-0.5">{report.work.completionPercentage}%</span>
+                  <span className={`text-[8px] font-bold block mt-1 uppercase ${report.work.surplusDeficitHours >= 0 ? "text-success-emerald" : "text-danger-rose"}`}>
+                    {report.work.surplusDeficitHours >= 0 ? `+${report.work.surplusDeficitHours}h Surplus` : `${report.work.surplusDeficitHours}h Deficit`}
+                  </span>
+                </div>
+
+                <div className="bg-zinc-950/40 p-3 rounded border border-border-subtle/50">
+                  <span className="text-[9px] uppercase text-zinc-500 block font-bold">Recovery Status</span>
+                  <span className="text-white font-bold text-sm block mt-0.5">
+                    {report.recovery?.recoveryRequired ? "Required" : "Normal"}
+                  </span>
+                  <span className="text-[8px] text-zinc-500 block mt-1 uppercase">
+                    Sat: {report.recovery?.saturdayRecoveryStatus === "RECOVERY_WORKDAY" ? "Workday" : "Holiday"}
+                  </span>
+                </div>
+              </div>
+
+              {/* DAILY PERFORMANCE DISTRIBUTION */}
+              {report.performance?.dailyDistribution && (
+                <div className="pt-2">
+                  <span className="text-[9px] uppercase text-zinc-500 block font-bold mb-2">Daily Performance Distribution (Mon–Sun)</span>
+                  <div className="grid grid-cols-7 gap-1.5 text-center text-[10px]">
+                    {report.performance.dailyDistribution.map((d) => (
+                      <div
+                        key={d.date}
+                        className={`p-2 rounded border ${
+                          d.metTarget
+                            ? "bg-accent-cyan/10 border-accent-cyan/30 text-white"
+                            : d.isWeekend
+                            ? "bg-zinc-950/30 border-zinc-900 text-zinc-500"
+                            : "bg-zinc-950/60 border-zinc-800 text-zinc-400"
+                        }`}
+                      >
+                        <span className="text-[8px] uppercase block text-zinc-500">{d.dayOfWeek.slice(0, 3)}</span>
+                        <span className="font-bold block mt-0.5">{d.productiveHours}h</span>
+                        <span className={`text-[7px] uppercase font-bold block mt-0.5 ${d.metTarget ? "text-accent-cyan" : "text-zinc-600"}`}>
+                          {d.metTarget ? "8h+ ✅" : d.isWeekend ? "Rest" : "<8h"}
+                        </span>
+                      </div>
+                    ))}
+                  </div>
+                </div>
+              )}
+            </Panel>
+          )}
+
           {/* SECTION 2: WORK SUMMARY */}
           <Panel className="space-y-4 print:border-2 print:border-black print:p-4">
             <div className="border-b border-border-subtle pb-3 print:border-b-2 print:border-black">
@@ -308,43 +386,21 @@ export default function WeeklyReviewPage() {
               </h2>
             </div>
 
-            <div className="grid grid-cols-2 md:grid-cols-4 gap-4 text-zinc-400 print:text-black">
+            <div className="grid grid-cols-1 sm:grid-cols-2 gap-4 text-zinc-400 print:text-black">
               
               <div className="bg-zinc-950/40 p-3.5 rounded border border-border-subtle/50 print:bg-white print:border-black">
-                <span className="text-[9px] uppercase text-zinc-500 block font-bold">Reading Frequency</span>
-                <span className="text-white print:text-black font-bold text-sm block mt-0.5">{report.habitReview.readingDays} / 7 days</span>
-                <div className="text-[8px] text-zinc-500 mt-1 uppercase space-y-0.5">
-                  <div>vs prev: {report.habitReview.readingDaysDiffPrev >= 0 ? `+${report.habitReview.readingDaysDiffPrev}` : report.habitReview.readingDaysDiffPrev}d</div>
-                  <div>vs 30d: {report.habitReview.readingDaysDiff30d >= 0 ? `+${report.habitReview.readingDaysDiff30d}` : report.habitReview.readingDaysDiff30d}d</div>
+                <span className="text-[9px] uppercase text-zinc-500 block font-bold">Operational Consistency</span>
+                <span className="text-white print:text-black font-bold text-sm block mt-0.5">{report.habitReview.consistencyScore}%</span>
+                <div className="text-[8px] text-zinc-500 mt-1 uppercase">
+                  100% Productive Activity Pacing
                 </div>
               </div>
 
               <div className="bg-zinc-950/40 p-3.5 rounded border border-border-subtle/50 print:bg-white print:border-black">
-                <span className="text-[9px] uppercase text-zinc-500 block font-bold">Workout Session Count</span>
-                <span className="text-white print:text-black font-bold text-sm block mt-0.5">{report.habitReview.workoutCount} sessions</span>
-                <div className="text-[8px] text-zinc-500 mt-1 uppercase space-y-0.5">
-                  <div>vs prev: {report.habitReview.workoutCountDiffPrev >= 0 ? `+${report.habitReview.workoutCountDiffPrev}` : report.habitReview.workoutCountDiffPrev}</div>
-                  <div>vs 30d: {report.habitReview.workoutCountDiff30d >= 0 ? `+${report.habitReview.workoutCountDiff30d}` : report.habitReview.workoutCountDiff30d}</div>
-                </div>
-              </div>
-
-              <div className="bg-zinc-950/40 p-3.5 rounded border border-border-subtle/50 print:bg-white print:border-black">
-                <span className="text-[9px] uppercase text-zinc-500 block font-bold">Average Sleep Hours</span>
-                <span className="text-white print:text-black font-bold text-sm block mt-0.5">{report.habitReview.avgSleepHours.toFixed(1)}h</span>
-                <div className="text-[8px] text-zinc-500 mt-1 uppercase space-y-0.5">
-                  <div>vs prev: {report.habitReview.avgSleepHoursDiffPrev >= 0 ? `+${report.habitReview.avgSleepHoursDiffPrev}` : report.habitReview.avgSleepHoursDiffPrev}h</div>
-                  <div>vs 30d: {report.habitReview.avgSleepHoursDiff30d >= 0 ? `+${report.habitReview.avgSleepHoursDiff30d}` : report.habitReview.avgSleepHoursDiff30d}h</div>
-                </div>
-              </div>
-
-              <div className="bg-zinc-950/40 p-3.5 rounded border border-border-subtle/50 print:bg-white print:border-black">
-                <span className="text-[9px] uppercase text-zinc-500 block font-bold">Avg Mobile Screen Time</span>
-                <span className="text-white print:text-black font-bold text-sm block mt-0.5">
-                  {report.habitReview.avgMobileScreenTime ? `${Math.floor(report.habitReview.avgMobileScreenTime / 60)}h ${report.habitReview.avgMobileScreenTime % 60}m` : "Not Logged"}
-                </span>
-                <div className="text-[8px] text-zinc-500 mt-1 uppercase space-y-0.5">
-                  <div>vs prev: {report.habitReview.avgMobileScreenTimeDiffPrev >= 0 ? `+${report.habitReview.avgMobileScreenTimeDiffPrev}` : report.habitReview.avgMobileScreenTimeDiffPrev}m</div>
-                  <div>vs 30d: {report.habitReview.avgMobileScreenTimeDiff30d >= 0 ? `+${report.habitReview.avgMobileScreenTimeDiff30d}` : report.habitReview.avgMobileScreenTimeDiff30d}m</div>
+                <span className="text-[9px] uppercase text-zinc-500 block font-bold">Execution Completion</span>
+                <span className="text-white print:text-black font-bold text-sm block mt-0.5">{report.habitReview.completionRate}%</span>
+                <div className="text-[8px] text-zinc-500 mt-1 uppercase">
+                  Workweek Target Execution
                 </div>
               </div>
 
@@ -352,11 +408,9 @@ export default function WeeklyReviewPage() {
 
             <div className="grid grid-cols-1 sm:grid-cols-2 gap-4 font-mono text-[10px] bg-zinc-950/50 p-3 rounded.5 border border-border-subtle/30 text-zinc-400 print:text-black print:bg-white print:border-black">
               <div className="space-y-1">
-                <div>&bull; <strong>Averaged Sleep Bedtime</strong>: {report.habitReview.avgBedTime}</div>
-                <div>&bull; <strong>Averaged Sleep Wake Time</strong>: {report.habitReview.avgWakeTime}</div>
+                <div>&bull; <strong>Overall Habit Completion Rate</strong>: {report.habitReview.completionRate}%</div>
               </div>
               <div className="space-y-1">
-                <div>&bull; <strong>Overall Habit Completion Rate</strong>: {report.habitReview.completionRate}%</div>
                 <div>&bull; <strong>Weighted Habit Consistency Score</strong>: {report.habitReview.consistencyScore}%</div>
               </div>
             </div>
