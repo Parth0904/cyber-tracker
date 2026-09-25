@@ -4,7 +4,7 @@ import * as React from "react";
 import Link from "next/link";
 import { usePathname } from "next/navigation";
 import { 
-  Terminal, FileText, Activity, Brain, Settings
+  Calendar, FileText, Activity, Settings
 } from "lucide-react";
 
 export default function TopNavbar() {
@@ -15,10 +15,9 @@ export default function TopNavbar() {
   }
 
   const navItems = [
-    { href: "/", label: "Console", icon: <Terminal size={13} /> },
+    { href: "/", label: "Calendar", icon: <Calendar size={13} /> },
     { href: "/reviews", label: "Reviews", icon: <FileText size={13} /> },
     { href: "/analytics", label: "Analytics", icon: <Activity size={13} /> },
-    { href: "/insights", label: "Holiday Intelligence", icon: <Brain size={13} /> },
   ];
 
   return (

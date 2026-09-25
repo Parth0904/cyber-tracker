@@ -156,6 +156,14 @@ CREATE TABLE IF NOT EXISTS work_time_daily (
   updated_at TIMESTAMP DEFAULT CURRENT_TIMESTAMP,
   source VARCHAR(50) DEFAULT 'windows_agent'
 );
+
+CREATE TABLE IF NOT EXISTS calendar_overrides (
+  date VARCHAR(10) PRIMARY KEY,
+  status VARCHAR(20),
+  topic TEXT,
+  created_at TIMESTAMP DEFAULT CURRENT_TIMESTAMP,
+  updated_at TIMESTAMP DEFAULT CURRENT_TIMESTAMP
+);
 `;
 
 async function main() {
@@ -171,6 +179,13 @@ async function main() {
         active_seconds INTEGER NOT NULL DEFAULT 0,
         updated_at TIMESTAMP DEFAULT CURRENT_TIMESTAMP,
         source VARCHAR(50) DEFAULT 'windows_agent'
+      );
+      CREATE TABLE IF NOT EXISTS calendar_overrides (
+        date VARCHAR(10) PRIMARY KEY,
+        status VARCHAR(20),
+        topic TEXT,
+        created_at TIMESTAMP DEFAULT CURRENT_TIMESTAMP,
+        updated_at TIMESTAMP DEFAULT CURRENT_TIMESTAMP
       );
     `);
     console.log("PostgreSQL Database schema initialized successfully.");

@@ -96,68 +96,34 @@ export async function generateMonthlyReport(
   month: number,
   timezone = APP_TIMEZONE
 ): Promise<MonthlyReport> {
-  const daysInMonth = new Date(Date.UTC(year, month, 0)).getUTCDate();
-  const startDate = `${year}-${String(month).padStart(2, "0")}-01`;
-  const endDate = `${year}-${String(month).padStart(2, "0")}-${String(daysInMonth).padStart(2, "0")}`;
-  const monthName = MONTH_NAMES[month] || `Month ${month}`;
+  const { getMonthCalendar } = await import("@/lib/services/calendar/monthlyCalendar");
+  const cal = await getMonthCalendar(year, month, undefined, timezone);
 
-  const workdayCount = getMonthWeekdayCount(year, month, timezone);
-  const monthlyTargetHours = Math.round(workdayCount * DAILY_IDEAL_HOURS * 100) / 100;
+  const daysInMonth = cal.totalDays;
+  const startDate = cal.startDate;
+  const endDate = cal.endDate;
+  const monthName = cal.monthName;
 
-  // 1. In-memory session stubs (work time is canonical)
-  const monthTargetSessions: any[] = [];
-  const monthLearningSessions: any[] = [];
-  const monthFindings: any[] = [];
+  const workdayCount = cal.plannedWorkdays;
+  const monthlyTargetHours = cal.monthlyRequiredHours;
+  const totalProductiveHours = cal.actualWorkedHours;
 
-  // Calculate day-by-day totals for the month
-  let productiveDaysCount = 0;
   let daysReaching8hCount = 0;
   let weekendDaysConsumed = 0;
-  let totalHuntingDuration = 0;
-  let totalLearningDuration = 0;
-  let reconDuration = 0;
-
   const dailyHoursMap: Record<string, number> = {};
 
-  const { getWorkTimeBetweenDates } = await import("@/lib/repositories/workTimeDaily");
-  const workTimeMap = await getWorkTimeBetweenDates(startDate, endDate);
-
-  for (let day = 1; day <= daysInMonth; day++) {
-    const curDateStr = `${year}-${String(month).padStart(2, "0")}-${String(day).padStart(2, "0")}`;
-    const dayHunting = monthTargetSessions.filter((s) => formatDateInTimezone(s.started_at!, timezone) === curDateStr);
-    const dayLearning = monthLearningSessions.filter((s) => formatDateInTimezone(s.started_at!, timezone) === curDateStr);
-
-    const huntMins = dayHunting.reduce((acc, s) => acc + (s.duration || 0), 0);
-    const learnMins = dayLearning.reduce((acc, s) => acc + (s.duration || 0), 0);
-    const canonicalSec = workTimeMap[curDateStr] || 0;
-    const canonicalHours = Math.round((canonicalSec / 3600) * 100) / 100;
-    const prodHours = canonicalSec > 0 ? canonicalHours : Math.round(((huntMins + learnMins) / 60) * 100) / 100;
-
-    dailyHoursMap[curDateStr] = prodHours;
-    totalHuntingDuration += huntMins;
-    totalLearningDuration += learnMins;
-
-    if (prodHours > 0) {
-      productiveDaysCount++;
-      if (isWeekend(curDateStr, timezone)) {
-        weekendDaysConsumed++;
-      }
-    }
-    if (prodHours >= DAILY_IDEAL_HOURS) {
+  for (const day of cal.days) {
+    dailyHoursMap[day.date] = day.actualWorkHours;
+    if (day.actualWorkHours >= 8.0) {
       daysReaching8hCount++;
     }
-
-    const dayRecon = dayHunting.filter((s) => s.type === "Recon");
-    reconDuration += dayRecon.reduce((acc, s) => acc + (s.duration || 0), 0);
+    if (day.actualWorkHours > 0 && isWeekend(day.date, timezone)) {
+      weekendDaysConsumed++;
+    }
   }
 
-  const totalHuntingHours = Math.round((totalHuntingDuration / 60) * 100) / 100;
-  const totalLearningHours = Math.round((totalLearningDuration / 60) * 100) / 100;
-  const totalProductiveHours = Math.round((totalHuntingHours + totalLearningHours) * 100) / 100;
-
-  const monthlyAverageWorkdayHours = workdayCount > 0
-    ? Math.round((totalProductiveHours / workdayCount) * 100) / 100
-    : 0;
+  const productiveDaysCount = cal.daysWorkedCount;
+  const monthlyAverageWorkdayHours = cal.averageHoursPerPlannedWorkday;
   const completionPercentage = monthlyTargetHours > 0
     ? Math.round((totalProductiveHours / monthlyTargetHours) * 1000) / 10
     : 0;
@@ -227,19 +193,15 @@ export async function generateMonthlyReport(
   const recoveryDaysCount = weeklyReports.reduce((acc, w) => acc + w.weekendRecoveryDaysCount, 0);
 
   // Cybersecurity Output
-  const targetsSet = new Set(monthTargetSessions.map((s) => s.target).filter(Boolean));
-  const validReports = monthFindings.filter((f) => f.status === "Valid").length;
-  const reportsSubmitted = monthFindings.length;
-
   const cybersecuritySummary = {
-    reconHours: Math.round((reconDuration / 60) * 100) / 100,
-    targetsWorkedCount: targetsSet.size,
-    targetsWorked: Array.from(targetsSet) as string[],
-    findingsCount: monthFindings.length,
-    validFindingsCount: validReports,
-    submittedFindingsCount: reportsSubmitted,
-    reportsSubmitted,
-    validReports,
+    reconHours: 0,
+    targetsWorkedCount: 0,
+    targetsWorked: [] as string[],
+    findingsCount: 0,
+    validFindingsCount: 0,
+    submittedFindingsCount: 0,
+    reportsSubmitted: 0,
+    validReports: 0,
   };
 
   // Performance classification
@@ -281,8 +243,8 @@ export async function generateMonthlyReport(
     workdayCount,
     monthlyTargetHours,
     totalProductiveHours,
-    totalLearningHours,
-    totalHuntingHours,
+    totalLearningHours: 0,
+    totalHuntingHours: 0,
     monthlyAverageWorkdayHours,
     completionPercentage,
     surplusDeficitHours,

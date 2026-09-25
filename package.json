@@ -19,7 +19,8 @@
     "agent:check": "powershell -ExecutionPolicy Bypass -File agent/scripts/check-agent.ps1",
     "agent:install": "powershell -ExecutionPolicy Bypass -File agent/scripts/install-task.ps1",
     "agent:uninstall": "powershell -ExecutionPolicy Bypass -File agent/scripts/uninstall-task.ps1",
-    "agent:test": "tsx --test agent/tests/**/*.test.ts"
+    "agent:test": "tsx --test agent/tests/**/*.test.ts",
+    "test:calendar": "tsx --test tests/**/*.test.ts"
   },
   "dependencies": {
     "better-sqlite3": "^12.10.0",

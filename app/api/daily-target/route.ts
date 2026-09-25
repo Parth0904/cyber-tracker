@@ -1,23 +1,36 @@
 import { NextResponse } from "next/server";
-import { getDailyStudyTarget } from "@/lib/services/metrics/dailyTarget";
+import { getMonthCalendar } from "@/lib/services/calendar/monthlyCalendar";
+import { APP_TIMEZONE, getTodayDateString } from "@/lib/services/metrics/dates";
 
 export async function GET() {
   try {
-    const target = await getDailyStudyTarget();
+    const todayStr = getTodayDateString(APP_TIMEZONE);
+    const [year, month] = todayStr.split("-").map(Number);
+    const cal = await getMonthCalendar(year, month, todayStr, APP_TIMEZONE);
+    const today = cal.days.find((d) => d.date === todayStr);
+
+    const targetHours = today?.plannedAllocationHours ?? 8.0;
+    const completedHours = today?.actualWorkHours ?? 0.0;
+    const remainingHours = Math.max(0, Math.round((targetHours - completedHours) * 10) / 10);
+    const completionPercentage = targetHours > 0 ? Math.round((completedHours / targetHours) * 1000) / 10 : 0;
+
     return NextResponse.json({
-      ...target,
-      // Canonical direct properties
-      todayTargetHours: target.targetHours,
-      todayProductiveHours: target.today.completedHours,
-      remainingHours: target.today.remainingHours,
-      completionPercentage: target.today.completionPercentage,
-      weeklyStatus: target.weekly.status,
-      monthlyStatus: target.monthly.status,
-      weekendRecoveryRequired: target.weekendRecovery.required,
-      recoveryWorkdays: target.weekendRecovery.recoveryWorkdays,
+      date: todayStr,
+      plannedStatus: today?.plannedStatus ?? "WORKDAY",
+      targetHours,
+      todayTargetHours: targetHours,
+      todayProductiveHours: completedHours,
+      completedHours,
+      remainingHours,
+      completionPercentage,
+      topic: today?.topic ?? null,
+      monthlyRequiredHours: cal.monthlyRequiredHours,
+      monthlyWorkedHours: cal.actualWorkedHours,
+      monthlyRemainingHours: cal.remainingHours,
+      requiredDailyPace: cal.requiredDailyPace,
     });
-  } catch (err) {
-    console.error("Failed to calculate canonical daily study target:", err);
+  } catch (err: any) {
+    console.error("Daily target route error:", err);
     return NextResponse.json({ error: "Internal Server Error" }, { status: 500 });
   }
 }

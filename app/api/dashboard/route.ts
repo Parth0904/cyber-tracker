@@ -2,40 +2,45 @@ import { NextResponse } from "next/server";
 import { getTodayEntry } from "@/lib/repositories/dailyEntries";
 import { calculateConsistency } from "@/lib/services/metrics/consistency";
 import { APP_TIMEZONE, getTodayDateString } from "@/lib/services/metrics/dates";
-import { getPerformanceOverview } from "@/lib/services/metrics/performance";
-import { getDailyStudyTarget } from "@/lib/services/metrics/dailyTarget";
-import { getPerformanceMentorOverview } from "@/lib/services/metrics/performanceMentor";
+import { getMonthCalendar } from "@/lib/services/calendar/monthlyCalendar";
 
 export async function GET() {
-  const today = getTodayDateString(APP_TIMEZONE);
-  const entry = (await getTodayEntry(today)) || null;
+  try {
+    const today = getTodayDateString(APP_TIMEZONE);
+    const [year, month] = today.split("-").map(Number);
 
-  // 1. Calculate dynamic consistency
-  const consistencyInfo = await calculateConsistency();
+    const [entry, consistencyInfo, calendar] = await Promise.all([
+      getTodayEntry(today),
+      calculateConsistency(),
+      getMonthCalendar(year, month, today, APP_TIMEZONE),
+    ]);
 
-  // 2. Canonical performance overview, daily target & performance mentor
-  const [performanceInfo, dailyTargetInfo, mentorInfo] = await Promise.all([
-    getPerformanceOverview(),
-    getDailyStudyTarget(),
-    getPerformanceMentorOverview(),
-  ]);
+    const todayDay = calendar.days.find((d) => d.date === today);
+    const targetHours = todayDay?.plannedAllocationHours ?? 8.0;
+    const completedHours = todayDay?.actualWorkHours ?? 0.0;
+    const remainingHours = Math.max(0, Math.round((targetHours - completedHours) * 10) / 10);
+    const percent = targetHours > 0 ? Math.round((completedHours / targetHours) * 1000) / 10 : 0;
 
-  return NextResponse.json({
-    completion: {
-      percent: dailyTargetInfo.today.completionPercentage,
-      completedHours: dailyTargetInfo.today.completedHours,
-      targetHours: dailyTargetInfo.targetHours,
-      remainingHours: dailyTargetInfo.today.remainingHours,
-      entry: {
-        notes: entry?.notes || "",
+    return NextResponse.json({
+      success: true,
+      calendar,
+      today: todayDay,
+      completion: {
+        percent,
+        completedHours,
+        targetHours,
+        remainingHours,
+        entry: {
+          notes: entry?.notes || "",
+        },
       },
-    },
-    consistency: consistencyInfo,
-    performance: {
-      ...performanceInfo,
-      dailyTarget: dailyTargetInfo,
-    },
-    dailyTarget: dailyTargetInfo,
-    mentor: mentorInfo,
-  });
+      consistency: consistencyInfo,
+    });
+  } catch (error: any) {
+    console.error("Dashboard API error:", error);
+    return NextResponse.json(
+      { success: false, error: error.message || "Failed to load dashboard" },
+      { status: 500 }
+    );
+  }
 }

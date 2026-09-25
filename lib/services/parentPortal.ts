@@ -2,7 +2,7 @@
  * Parent Portal Architecture Preparation Service
  * 
  * Provides an isolated, read-only compilation surface for a future authenticated
- * Parent Portal. Consumes canonical reporting, metrics, and holiday simulation engines
+ * Parent Portal. Consumes canonical reporting and monthly calendar planner
  * with ZERO database writes and zero side-effects.
  */
 
@@ -11,12 +11,7 @@ import { getISOWeekUTC, getISOWeekYearUTC } from "./metrics/dates";
 import { generateWeeklyReviewReport } from "./weeklyReview";
 import { generateMonthlyReport } from "./reporting/monthlyReport";
 import { generateYearlyReport } from "./reporting/yearlyReport";
-import {
-  calculateHolidayCapacity,
-  simulateHolidayRecovery,
-  HolidaySimulationResult,
-} from "./holiday/holidayIntelligence";
-import { getPerformanceOverview } from "./metrics/performance";
+import { getMonthCalendar, MonthlyCalendarView } from "./calendar/monthlyCalendar";
 
 export interface ParentPortalWeeklySummary {
   year: number;
@@ -57,41 +52,19 @@ export interface ParentPortalYearSummary {
   completionPercentage: number;
 }
 
-export interface ParentQuickSimulationScenario {
-  holidays: number;
-  plannedDailyHours: number;
-  includeWeekends: boolean;
-  recoveryWorkdaysRequired: number;
-  recoveryWeeks: number;
-  projectedRecoveryDate: string;
-  maintainsIdeal: boolean;
-  parentSummary: string;
-}
-
 export interface ParentPortalOverview {
   studentName: string;
   timezone: string;
   generatedAt: string;
   todayDate: string;
 
-  // Active status
-  holidayCapacity: {
-    availableHolidays: number;
-    currentAverage: number;
-    idealAverage: number;
-    surplusHours: number;
-    deficitHours: number;
-    status: string;
-    message: string;
-  };
+  // Monthly Calendar plan & actuals
+  calendar: MonthlyCalendarView;
 
   // Performance summaries
   currentWeek: ParentPortalWeeklySummary;
   currentMonth: ParentPortalMonthSummary;
   currentYear: ParentPortalYearSummary;
-
-  // Quick pre-calculated scenarios for immediate parent visibility
-  quickScenarios: ParentQuickSimulationScenario[];
 }
 
 /**
@@ -109,48 +82,13 @@ export async function getParentPortalOverview(options?: {
   const currentWeekNum = getISOWeekUTC(nowUTC);
   const currentWeekYear = getISOWeekYearUTC(nowUTC);
 
-  // 1. Fetch current weekly, monthly, and yearly reports
-  const [weeklyReport, monthlyReport, yearlyReport] = await Promise.all([
+  // Fetch current weekly, monthly, yearly, and calendar views
+  const [weeklyReport, monthlyReport, yearlyReport, calendar] = await Promise.all([
     generateWeeklyReviewReport(currentWeekYear, currentWeekNum, tz),
     generateMonthlyReport(year, month, tz),
     generateYearlyReport(year, tz),
+    getMonthCalendar(year, month, todayStr, tz),
   ]);
-
-  // 2. Compute canonical holiday capacity
-  const capacity = calculateHolidayCapacity({
-    workHours: monthlyReport.totalProductiveHours,
-    asOfDateStr: todayStr,
-    timezone: tz,
-  });
-
-  // 3. Pre-calculate quick scenarios (1, 2, 3, 5 days) at standard 9.0h/day pace
-  const scenarioDays = [1, 2, 3, 5];
-  const quickScenarios: ParentQuickSimulationScenario[] = scenarioDays.map((days) => {
-    const sim = simulateHolidayRecovery({
-      holidays: days,
-      plannedDailyHours: 9.0,
-      includeWeekends: false,
-      asOfDateStr: todayStr,
-      timezone: tz,
-      currentProductiveHours: capacity.totalProductiveHours,
-      elapsedWorkdays: capacity.elapsedWorkdays,
-    });
-
-    const parentSummary = sim.maintainsIdeal
-      ? `Taking ${days} day${days > 1 ? "s" : ""} off will NOT affect Parth's 8.0h/workday standard.`
-      : `Taking ${days} day${days > 1 ? "s" : ""} off will require ${sim.recoveryWorkdaysRequired} workdays (${sim.recoveryWeeks} weeks) to recover, completing around ${sim.projectedRecoveryDate} at 9.0h/day.`;
-
-    return {
-      holidays: days,
-      plannedDailyHours: 9.0,
-      includeWeekends: false,
-      recoveryWorkdaysRequired: sim.recoveryWorkdaysRequired,
-      recoveryWeeks: sim.recoveryWeeks,
-      projectedRecoveryDate: sim.projectedRecoveryDate,
-      maintainsIdeal: sim.maintainsIdeal,
-      parentSummary,
-    };
-  });
 
   return {
     studentName: "Parth",
@@ -158,15 +96,7 @@ export async function getParentPortalOverview(options?: {
     generatedAt: new Date().toISOString(),
     todayDate: todayStr,
 
-    holidayCapacity: {
-      availableHolidays: capacity.availableHolidays,
-      currentAverage: capacity.currentAverage,
-      idealAverage: capacity.idealAverage,
-      surplusHours: capacity.surplusHours,
-      deficitHours: capacity.deficitHours,
-      status: capacity.status,
-      message: capacity.message,
-    },
+    calendar,
 
     currentWeek: {
       year: weeklyReport.year,
@@ -206,8 +136,6 @@ export async function getParentPortalOverview(options?: {
       averageWorkdayHours: yearlyReport.averageWorkdayHours,
       completionPercentage: yearlyReport.targetCompletionPercentage,
     },
-
-    quickScenarios,
   };
 }
 
@@ -221,58 +149,15 @@ export interface ParentSimulationRequest {
 
 export interface ParentSimulationResponse {
   studentName: string;
-  simulation: HolidaySimulationResult;
   parentExplanation: string;
 }
 
-/**
- * Calculates an interactive predictive simulation customized with clear parent explanations.
- */
 export async function calculateParentHolidaySimulation(
   request: ParentSimulationRequest
 ): Promise<ParentSimulationResponse> {
-  const tz = request.timezone || APP_TIMEZONE;
-  const todayStr = request.asOfDateStr || getTodayDateString(tz);
-  const plannedHours = request.plannedDailyHours ?? 9.0;
-  const includeWeekends = Boolean(request.includeWeekends);
-
-  const overview = await getPerformanceOverview(tz);
-  const capacity = calculateHolidayCapacity({
-    workHours: overview.currentMonth.performance.totalProductiveHours,
-    asOfDateStr: todayStr,
-    timezone: tz,
-  });
-
-  const sim = simulateHolidayRecovery({
-    holidays: request.holidays,
-    plannedDailyHours: plannedHours,
-    includeWeekends,
-    asOfDateStr: todayStr,
-    timezone: tz,
-    currentProductiveHours: capacity.totalProductiveHours,
-    elapsedWorkdays: capacity.elapsedWorkdays,
-  });
-
-  let parentExplanation = "";
-  if (sim.maintainsIdeal) {
-    parentExplanation = `Parth has enough surplus hours that taking ${request.holidays} day${
-      request.holidays > 1 ? "s" : ""
-    } off will maintain an average above the 8.0h/workday standard. No recovery is required.`;
-  } else if (!includeWeekends && plannedHours <= 8.0) {
-    parentExplanation = `At a standard 8.0h/workday pace without weekend work, Parth will not generate the extra hours needed to catch up. A recovery pace between 8.5h and 10.0h per workday or weekend study is necessary.`;
-  } else {
-    parentExplanation = `If Parth takes ${request.holidays} day${
-      request.holidays > 1 ? "s" : ""
-    } off, he will create a deficit of ${sim.holidayDeficitHours} hours. Working at ${sim.dailyRecoveryTarget}h per day${
-      includeWeekends ? " (including weekends)" : " (weekdays only)"
-    }, he will fully recover in ${sim.recoveryWorkdaysRequired} workdays (about ${
-      sim.recoveryWeeks
-    } weeks), returning to pre-holiday standing by ${sim.projectedRecoveryDate}.`;
-  }
-
+  const days = request.holidays;
   return {
     studentName: "Parth",
-    simulation: sim,
-    parentExplanation,
+    parentExplanation: `Schedule adjustment for ${days} day${days !== 1 ? "s" : ""} can be managed directly via the Monthly Calendar Planner by toggling planned status between WORKDAY and HOLIDAY.`,
   };
 }
