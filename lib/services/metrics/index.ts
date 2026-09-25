@@ -10,7 +10,6 @@ export * from "./dates";
 export * from "./activities";
 export * from "./habits";
 export * from "./completion";
-export * from "./consistency";
 export * from "./productivity";
 export * from "./comparisons";
 export * from "./performance";

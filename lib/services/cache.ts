@@ -7,29 +7,9 @@ export interface CacheEntry<T> {
 }
 
 // Global cache variables (instance-local on the server)
-let consistencyCache: CacheEntry<any> | null = null;
 let diagnosticsCache: CacheEntry<any> | null = null;
 
 const CACHE_TTL = 24 * 60 * 60 * 1000; // 24 hours in milliseconds
-
-export function getConsistencyCache(): CacheEntry<any> | null {
-  const now = Date.now();
-  if (consistencyCache && now - consistencyCache.timestamp < CACHE_TTL) {
-    return consistencyCache;
-  }
-  return null;
-}
-
-export function setConsistencyCache(data: any) {
-  consistencyCache = {
-    data,
-    timestamp: Date.now(),
-  };
-}
-
-export function invalidateConsistencyCache() {
-  consistencyCache = null;
-}
 
 export function getDiagnosticsCache(): CacheEntry<any> | null {
   const now = Date.now();

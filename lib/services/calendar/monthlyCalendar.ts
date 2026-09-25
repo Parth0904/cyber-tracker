@@ -50,6 +50,8 @@ export interface MonthlyCalendarDay {
   isOverridden: boolean;
   plannedStatus: DayStatus;
   plannedAllocationHours: number; // 8 for WORKDAY, 0 for HOLIDAY
+  dailyTargetHours: number; // Distributed required target for remaining workdays (or 8h historical / 0h holiday)
+  dailyTargetFormatted: string; // e.g. "Target: 6h", "Target: 8h", "Target: 0h", or "10+ hr needed"
   actualWorkSeconds: number;
   actualWorkHours: number;
   actualWorkFormatted: string; // e.g. "6h 42m"
@@ -111,6 +113,8 @@ export interface MonthlyCalendarReport {
   completionPercentage: number;
   surplusDeficitHours: number;
   isCompleted: boolean;
+  requiredDailyPace: number;
+  requiredDailyPaceFormatted: string;
 }
 
 const MONTH_NAMES = [
@@ -138,6 +142,42 @@ export function formatHoursMinutes(hoursDecimal: number): string {
   const h = Math.floor(totalMinutes / 60);
   const m = totalMinutes % 60;
   return `${h}h ${String(m).padStart(2, "0")}m`;
+}
+
+/**
+ * Format required daily pace according to the 10-hour cap policy.
+ * When calculated required daily pace reaches/exceeds 10 hours:
+ * returns "10+ hr needed" instead of displaying values above 10h.
+ */
+export function formatRequiredPace(hoursDecimal: number): string {
+  if (!hoursDecimal || hoursDecimal <= 0) return "0h 00m";
+  if (hoursDecimal >= 10) {
+    return "10+ hr needed";
+  }
+  return formatHoursMinutes(hoursDecimal);
+}
+
+/**
+ * Format daily target according to the 10-hour cap policy.
+ * When calculated target >= 10 hours:
+ * returns "10+ hr needed" instead of displaying values >= 10h.
+ * For integer hours: "Target: 6h", "Target: 8h", "Target: 0h"
+ * For fractional hours: "Target: 8h 04m"
+ */
+export function formatDailyTarget(targetHours: number): string {
+  if (!targetHours || targetHours <= 0) return "Target: 0h";
+  if (targetHours >= 10) {
+    return "10+ hr needed";
+  }
+  const rounded = Math.round(targetHours * 100) / 100;
+  if (Number.isInteger(rounded)) {
+    return `Target: ${rounded}h`;
+  }
+  const totalMinutes = Math.round(rounded * 60);
+  const h = Math.floor(totalMinutes / 60);
+  const m = totalMinutes % 60;
+  if (m === 0) return `Target: ${h}h`;
+  return `Target: ${h}h ${String(m).padStart(2, "0")}m`;
 }
 
 /**
@@ -191,7 +231,23 @@ export function calculateMonthCalendar(params: {
   const endDate = `${year}-${String(month).padStart(2, "0")}-${String(daysInMonth).padStart(2, "0")}`;
   const monthName = MONTH_NAMES[month] || `Month ${month}`;
 
-  const days: MonthlyCalendarDay[] = [];
+  interface DayIntermediary {
+    dateStr: string;
+    day: number;
+    dayOfWeek: "Monday" | "Tuesday" | "Wednesday" | "Thursday" | "Friday" | "Saturday" | "Sunday";
+    isDefaultWorkday: boolean;
+    isOverridden: boolean;
+    effectiveStatus: DayStatus;
+    plannedAllocationHours: number;
+    dayWorkSec: number;
+    actualHours: number;
+    topic: string | null;
+    isToday: boolean;
+    isPast: boolean;
+    isFuture: boolean;
+  }
+
+  const rawDays: DayIntermediary[] = [];
   let plannedWorkdays = 0;
   let plannedHolidays = 0;
   let actualWorkedSeconds = 0;
@@ -246,17 +302,16 @@ export function calculateMonthCalendar(params: {
 
     const actualHours = Math.round((dayWorkSec / 3600) * 100) / 100;
 
-    days.push({
-      date: dateStr,
-      dayOfMonth: day,
+    rawDays.push({
+      dateStr,
+      day,
       dayOfWeek,
       isDefaultWorkday,
       isOverridden,
-      plannedStatus: effectiveStatus,
+      effectiveStatus,
       plannedAllocationHours,
-      actualWorkSeconds: dayWorkSec,
-      actualWorkHours: actualHours,
-      actualWorkFormatted: formatSecondsToHoursMinutes(dayWorkSec),
+      dayWorkSec,
+      actualHours,
       topic,
       isToday,
       isPast,
@@ -286,6 +341,56 @@ export function calculateMonthCalendar(params: {
   if (remainingWorkdays > 0 && remainingHours > 0) {
     requiredDailyPace = Math.round((remainingHours / remainingWorkdays) * 100) / 100;
   }
+
+  // Determine distributed daily target for remaining workdays
+  const distributedDailyTarget =
+    remainingWorkdays > 0 && remainingHours > 0 ? requiredDailyPace : 0;
+
+  // Build final days array with per-cell target allocation
+  const days: MonthlyCalendarDay[] = rawDays.map((d) => {
+    let dailyTargetHours = 0;
+    let dailyTargetFormatted = "Target: 0h";
+
+    if (d.effectiveStatus === "HOLIDAY") {
+      // Holidays always receive 0h target, excluded from deficit distribution
+      dailyTargetHours = 0;
+      dailyTargetFormatted = "Target: 0h";
+    } else if (d.isPast) {
+      // Historical completed days retain their standard 8h target
+      dailyTargetHours = 8;
+      dailyTargetFormatted = "Target: 8h";
+    } else {
+      // Remaining workdays (dateStr >= asOf in current/future month)
+      if (startDate > asOf) {
+        // Future month starts completely fresh: standard 8h target
+        dailyTargetHours = 8;
+        dailyTargetFormatted = "Target: 8h";
+      } else {
+        // Current month distributed deficit across remaining workdays
+        dailyTargetHours = distributedDailyTarget;
+        dailyTargetFormatted = formatDailyTarget(distributedDailyTarget);
+      }
+    }
+
+    return {
+      date: d.dateStr,
+      dayOfMonth: d.day,
+      dayOfWeek: d.dayOfWeek,
+      isDefaultWorkday: d.isDefaultWorkday,
+      isOverridden: d.isOverridden,
+      plannedStatus: d.effectiveStatus,
+      plannedAllocationHours: d.plannedAllocationHours,
+      dailyTargetHours,
+      dailyTargetFormatted,
+      actualWorkSeconds: d.dayWorkSec,
+      actualWorkHours: d.actualHours,
+      actualWorkFormatted: formatSecondsToHoursMinutes(d.dayWorkSec),
+      topic: d.topic,
+      isToday: d.isToday,
+      isPast: d.isPast,
+      isFuture: d.isFuture,
+    };
+  });
 
   const averageHoursPerPlannedWorkday =
     plannedWorkdays > 0
@@ -319,7 +424,7 @@ export function calculateMonthCalendar(params: {
     surplusHours,
     remainingWorkdays,
     requiredDailyPace,
-    requiredDailyPaceFormatted: formatHoursMinutes(requiredDailyPace),
+    requiredDailyPaceFormatted: formatRequiredPace(requiredDailyPace),
     daysWorkedCount,
     averageHoursPerPlannedWorkday,
     averageHoursPerPlannedWorkdayFormatted: formatHoursMinutes(averageHoursPerPlannedWorkday),
@@ -414,5 +519,7 @@ export async function generateMonthlyCalendarReport(
     completionPercentage,
     surplusDeficitHours,
     isCompleted,
+    requiredDailyPace: view.requiredDailyPace,
+    requiredDailyPaceFormatted: view.requiredDailyPaceFormatted,
   };
 }

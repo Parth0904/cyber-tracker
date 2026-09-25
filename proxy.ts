@@ -25,7 +25,7 @@ export function proxy(req: NextRequest) {
   }
 
   // CRON_SECRET validation for scheduled tasks
-  if (pathname === "/api/reviews/parent-report-cron" || pathname === "/api/settings/backup") {
+  if (pathname === "/api/settings/backup") {
     const cronSecret = process.env.CRON_SECRET;
     const isProduction = process.env.NODE_ENV === "production";
 
@@ -46,10 +46,12 @@ export function proxy(req: NextRequest) {
     return NextResponse.next();
   }
 
-  // Safeguard: completely bypass auth checks for public routes, static assets, and APIs
+  // Safeguard: completely bypass auth checks for public routes, tokenized parent portal, static assets, and APIs
   if (
     pathname === "/login" ||
     pathname.startsWith("/api/auth/") ||
+    pathname.startsWith("/parent") ||
+    pathname.startsWith("/api/parent") ||
     pathname.includes(".") ||
     pathname.startsWith("/_next/") ||
     pathname.startsWith("/icons/") ||
@@ -83,6 +85,6 @@ export function proxy(req: NextRequest) {
 
 export const config = {
   matcher: [
-    "/((?!login|api/auth|_next|icons|manifest\\.json|sw\\.js|favicon\\.ico|.*\\.).*)",
+    "/((?!login|api/auth|parent|api/parent|_next|icons|manifest\\.json|sw\\.js|favicon\\.ico|.*\\.).*)",
   ],
 };

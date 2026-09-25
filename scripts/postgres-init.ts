@@ -187,6 +187,14 @@ async function main() {
         created_at TIMESTAMP DEFAULT CURRENT_TIMESTAMP,
         updated_at TIMESTAMP DEFAULT CURRENT_TIMESTAMP
       );
+      CREATE TABLE IF NOT EXISTS parent_portal_tokens (
+        id VARCHAR(64) PRIMARY KEY,
+        token_hash VARCHAR(128) UNIQUE NOT NULL,
+        label VARCHAR(255),
+        created_at TIMESTAMP DEFAULT CURRENT_TIMESTAMP,
+        expires_at TIMESTAMP NULL,
+        revoked_at TIMESTAMP NULL
+      );
     `);
     console.log("PostgreSQL Database schema initialized successfully.");
   } catch (err) {

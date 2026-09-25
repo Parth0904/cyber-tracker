@@ -74,12 +74,8 @@ NEXTAUTH_URL=http://localhost:3000
 # Database defaults: If DATABASE_URL is left empty, SQLite is automatically selected.
 # DATABASE_URL=postgresql://user:password@localhost:5432/cyber_tracker
 
-# Parent Report SMTP Configuration (Required for automated Email Digests)
-SMTP_HOST=smtp.gmail.com
-SMTP_PORT=587
-SMTP_USER=your_smtp_username@gmail.com
-SMTP_PASS=your_smtp_app_password
-PARENT_EMAIL=recipient_parent_email@example.com
+# Optional Cron Secret for production backup endpoints
+# CRON_SECRET=your_production_cron_secret
 ```
 
 ### Installation
@@ -105,9 +101,8 @@ npm run build
 
 ### Vercel Deployment Settings
 1. Bind environment variables (`NEXTAUTH_SECRET`, `NEXTAUTH_URL`, `DATABASE_URL` for PostgreSQL).
-2. Configure **Cron Jobs** (`vercel.json` scheduler) to trigger weekly review compilation and parent report dispatches every Sunday:
-   - Target cron endpoint for reviews compilation: `/api/reviews` (POST)
-   - Target cron endpoint for parent weekly digests: `/api/reviews/parent-report-cron` (POST)
+2. Configure **Cron Jobs** (`vercel.json` scheduler) for automated daily database backups:
+   - Target cron endpoint for database backup: `/api/settings/backup` (POST)
 
 ---
 

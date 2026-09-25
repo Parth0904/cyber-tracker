@@ -97,8 +97,7 @@ export function DailyHabitsForm() {
       setHasSubmittedToday(true);
       setIsEditing(false);
 
-      // Dispatch events to dynamically update consistency theme and dashboard data
-      window.dispatchEvent(new Event("refresh-consistency-theme"));
+      // Dispatch event to update dashboard data
       window.dispatchEvent(new Event("refresh-dashboard-data"));
     } catch (err) {
       console.error("Save failed:", err);

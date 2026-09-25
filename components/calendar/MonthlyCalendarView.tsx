@@ -329,7 +329,7 @@ export default function MonthlyCalendarView() {
           <div className="text-[11px] font-mono uppercase tracking-wider text-zinc-400">
             Current Pace
           </div>
-          <div className="text-2xl font-bold font-mono text-white">
+          <div className={`text-2xl font-bold font-mono ${(calendarData?.requiredDailyPace ?? 0) >= 10 ? "text-amber-400" : "text-white"}`}>
             {calendarData?.requiredDailyPaceFormatted ?? "0h 00m"}
           </div>
           <div className="text-[10px] text-zinc-500 font-mono">
@@ -341,126 +341,149 @@ export default function MonthlyCalendarView() {
 
       {/* 4. CALENDAR GRID */}
       <div className="rounded-2xl border border-zinc-800/80 bg-zinc-950/70 backdrop-blur-xl overflow-hidden shadow-2xl">
-        
-        {/* Day-of-week Headers */}
-        <div className="grid grid-cols-7 border-b border-zinc-800/80 bg-zinc-900/40 text-center text-xs font-mono font-bold uppercase tracking-wider text-zinc-400 py-3">
-          {dayNames.map((d, idx) => (
+        <div className="overflow-x-auto">
+          <div className="min-w-[700px]">
+            {/* Day-of-week Headers */}
             <div
-              key={d}
-              className={idx >= 5 ? "text-amber-400/70" : "text-zinc-300"}
+              className="grid grid-cols-7 border-b border-zinc-800/80 bg-zinc-900/40 text-center text-xs font-mono font-bold uppercase tracking-wider text-zinc-400 py-3"
+              style={{ display: "grid", gridTemplateColumns: "repeat(7, minmax(0, 1fr))" }}
             >
-              {d}
+              {dayNames.map((d, idx) => (
+                <div
+                  key={d}
+                  className={idx >= 5 ? "text-red-400/80" : "text-zinc-300"}
+                >
+                  {d}
+                </div>
+              ))}
             </div>
-          ))}
-        </div>
 
-        {/* Days Grid */}
-        <div className="grid grid-cols-7 divide-x divide-y divide-zinc-900">
-          
-          {/* Leading empty cells */}
-          {Array.from({ length: leadingBlankDays }).map((_, i) => (
+            {/* Days Grid */}
             <div
-              key={`blank-${i}`}
-              className="min-h-[110px] sm:min-h-[130px] p-2 bg-zinc-950/40 opacity-25"
-            />
-          ))}
+              className="grid grid-cols-7 divide-x divide-y divide-zinc-900"
+              style={{ display: "grid", gridTemplateColumns: "repeat(7, minmax(0, 1fr))" }}
+            >
+              
+              {/* Leading empty cells */}
+              {Array.from({ length: leadingBlankDays }).map((_, i) => (
+                <div
+                  key={`blank-${i}`}
+                  className="min-h-[110px] sm:min-h-[130px] p-2 bg-zinc-950/40 opacity-25"
+                />
+              ))}
 
-          {/* Calendar Days */}
-          {calendarData?.days.map((day) => {
-            const isWorkday = day.plannedStatus === "WORKDAY";
-            const hasWork = day.actualWorkSeconds > 0;
-            const metAllocation = isWorkday && day.actualWorkHours >= 8.0;
+              {/* Calendar Days */}
+              {calendarData?.days.map((day) => {
+                const isWorkday = day.plannedStatus === "WORKDAY";
+                const hasWork = day.actualWorkSeconds > 0;
 
-            return (
-              <div
-                key={day.date}
-                onClick={() => handleDayClick(day)}
-                className={`min-h-[110px] sm:min-h-[130px] p-2.5 sm:p-3 flex flex-col justify-between cursor-pointer transition-all hover:bg-zinc-900/50 group relative ${
-                  day.isToday
-                    ? "bg-cyan-950/20 ring-1 ring-inset ring-cyan-500/50"
-                    : isWorkday
-                    ? "bg-zinc-950/50"
-                    : "bg-zinc-950/80"
-                }`}
-              >
-                {/* Top Row: Date & Status Badge */}
-                <div className="flex items-start justify-between gap-1">
-                  
-                  {/* Date Number */}
-                  <div className="flex items-center gap-1">
-                    <span
-                      className={`text-sm sm:text-base font-bold font-mono ${
-                        day.isToday
-                          ? "w-6 h-6 rounded-full bg-cyan-400 text-black flex items-center justify-center font-black"
-                          : "text-zinc-200 group-hover:text-white"
-                      }`}
-                    >
-                      {day.dayOfMonth}
-                    </span>
-                    {day.isOverridden && (
+                return (
+                  <div
+                    key={day.date}
+                    onClick={() => handleDayClick(day)}
+                    className={`min-h-[110px] sm:min-h-[130px] p-2.5 sm:p-3 flex flex-col justify-between cursor-pointer transition-all hover:bg-zinc-900/50 group relative ${
+                      day.isToday
+                        ? "bg-zinc-900/90 ring-1 ring-inset ring-cyan-500/60 border border-cyan-500/40"
+                        : isWorkday
+                        ? "bg-zinc-950/60 border border-zinc-900/80 hover:border-zinc-700/80"
+                        : "bg-red-950/10 border border-zinc-900/80 hover:border-red-900/30"
+                    }`}
+                  >
+                    {/* Top Row: Date & Status Badge */}
+                    <div className="flex items-start justify-between gap-1">
+                      
+                      {/* Date Number */}
+                      <div className="flex items-center gap-1">
+                        <span
+                          className={`text-sm sm:text-base font-bold font-mono ${
+                            day.isToday
+                              ? "w-6 h-6 rounded-full bg-cyan-400 text-black flex items-center justify-center font-black"
+                              : day.isFuture
+                              ? "text-zinc-500"
+                              : "text-zinc-200 group-hover:text-white"
+                          }`}
+                        >
+                          {day.dayOfMonth}
+                        </span>
+                        {day.isOverridden && (
+                          <span
+                            className="w-1.5 h-1.5 rounded-full bg-amber-400"
+                            title="Manual calendar override"
+                          />
+                        )}
+                      </div>
+
+                      {/* Status Badge */}
                       <span
-                        className="w-1.5 h-1.5 rounded-full bg-amber-400"
-                        title="Manual calendar override"
-                      />
-                    )}
-                  </div>
-
-                  {/* Status Badge */}
-                  <span
-                    className={`text-[9px] sm:text-[10px] font-mono px-1.5 py-0.5 rounded font-bold uppercase tracking-wider ${
-                      isWorkday
-                        ? "bg-cyan-950/70 text-cyan-300 border border-cyan-800/40"
-                        : "bg-zinc-900 text-zinc-400 border border-zinc-800"
-                    }`}
-                  >
-                    {isWorkday ? "WORK" : "HOLIDAY"}
-                  </span>
-                </div>
-
-                {/* Middle: Planned Allocation & Topic */}
-                <div className="my-1.5 space-y-1">
-                  
-                  {/* Allocation */}
-                  <div className="text-[10px] sm:text-[11px] font-mono text-zinc-500 flex items-center gap-1">
-                    <span>{isWorkday ? "8h planned" : "0h planned"}</span>
-                  </div>
-
-                  {/* Optional Topic Chip */}
-                  {day.topic && (
-                    <div
-                      className="inline-flex items-center gap-1 px-1.5 py-0.5 rounded bg-zinc-900 border border-zinc-800 text-[10px] text-zinc-300 max-w-full truncate font-sans"
-                      title={day.topic}
-                    >
-                      <Tag size={9} className="text-cyan-400 shrink-0" />
-                      <span className="truncate">{day.topic}</span>
+                        className={`text-[9px] sm:text-[10px] font-mono px-1.5 py-0.5 rounded font-bold uppercase tracking-wider ${
+                          isWorkday
+                            ? "bg-zinc-900/80 text-zinc-300 border border-zinc-800"
+                            : "bg-red-950/50 text-red-400 border border-red-900/50"
+                        }`}
+                      >
+                        {isWorkday ? "WORK" : "HOLIDAY"}
+                      </span>
                     </div>
-                  )}
 
-                </div>
+                    {/* Middle: Daily Target & Topic */}
+                    <div className="my-1.5 space-y-1">
+                      
+                      {/* Daily Target */}
+                      <div className="text-[10px] sm:text-[11px] font-mono flex items-center gap-1">
+                        <span
+                          className={
+                            day.dailyTargetFormatted === "10+ hr needed"
+                              ? "text-amber-400 font-bold"
+                              : day.isToday && isWorkday
+                              ? "text-cyan-300 font-bold"
+                              : isWorkday && day.isFuture
+                              ? "text-zinc-300 font-medium"
+                              : "text-zinc-500"
+                          }
+                        >
+                          {day.dailyTargetFormatted}
+                        </span>
+                      </div>
 
-                {/* Bottom Row: Actual Work Time from Windows Agent */}
-                <div className="pt-1 border-t border-zinc-900/80 flex items-baseline justify-between text-[11px] font-mono">
-                  <span
-                    className={`font-bold ${
-                      metAllocation
-                        ? "text-emerald-400"
-                        : hasWork
-                        ? "text-cyan-300"
-                        : "text-zinc-600"
-                    }`}
-                  >
-                    {day.actualWorkFormatted}
-                  </span>
+                      {/* Optional Topic Chip */}
+                      {day.topic && (
+                        <div
+                          className="inline-flex items-center gap-1 px-1.5 py-0.5 rounded bg-zinc-900 border border-zinc-800 text-[10px] text-zinc-300 max-w-full truncate font-sans"
+                          title={day.topic}
+                        >
+                          <Tag size={9} className="text-zinc-400 shrink-0" />
+                          <span className="truncate">{day.topic}</span>
+                        </div>
+                      )}
 
-                  <span className="text-[9px] text-zinc-600 uppercase">
-                    {hasWork ? "actual" : "idle"}
-                  </span>
-                </div>
+                    </div>
 
-              </div>
-            );
-          })}
+                    {/* Bottom Row: Actual Work Time from Windows Agent */}
+                    <div className="pt-1 border-t border-zinc-900/80 flex items-baseline justify-between text-[11px] font-mono">
+                      <span
+                        className={`font-bold ${
+                          hasWork
+                            ? "text-emerald-400"
+                            : day.isFuture
+                            ? "text-zinc-700"
+                            : "text-zinc-600"
+                        }`}
+                      >
+                        {day.actualWorkFormatted}
+                      </span>
 
+                      <span className="text-[9px] text-zinc-600 uppercase">
+                        {hasWork ? "actual" : "idle"}
+                      </span>
+                    </div>
+
+                  </div>
+                );
+              })}
+
+            </div>
+
+          </div>
         </div>
 
       </div>

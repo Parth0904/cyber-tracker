@@ -1,441 +1,441 @@
 "use client";
 
 import * as React from "react";
-import { Activity } from "lucide-react";
-import { Button } from "@/components/ui/Button";
-import type { HistoricalAnalyticsPayload } from "@/lib/services/analytics/historicalAnalytics";
+import {
+  Activity,
+  Calendar,
+  Clock,
+  Shield,
+  TrendingUp,
+  Award,
+  Zap,
+  CheckCircle2,
+  RefreshCw,
+  BarChart3,
+  CalendarDays,
+} from "lucide-react";
+import type {
+  GlobalAnalyticsResult,
+  MonthPerformanceSummary,
+} from "@/lib/services/analytics/globalAnalytics";
 
-export default function AnalyticsPage() {
-  const [data, setData] = React.useState<HistoricalAnalyticsPayload | null>(null);
+export default function GlobalAnalyticsPage() {
+  const [range, setRange] = React.useState<"all" | "this_year" | "prev_year">("all");
+  const [data, setData] = React.useState<GlobalAnalyticsResult | null>(null);
   const [loading, setLoading] = React.useState(true);
-  const [activeTab, setActiveTab] = React.useState<"daily" | "weekly" | "monthly" | "yearly">("daily");
+  const [refreshing, setRefreshing] = React.useState(false);
 
-  const loadAnalytics = async () => {
-    setLoading(true);
+  const fetchAnalytics = React.useCallback(async (r: string, isSilent = false) => {
+    if (!isSilent) setLoading(true);
+    else setRefreshing(true);
+
     try {
-      const res = await fetch("/api/analytics");
+      const res = await fetch(`/api/analytics?range=${r}`);
       if (res.ok) {
         const json = await res.json();
-        setData(json);
+        if (json.success && json.analytics) {
+          setData(json.analytics);
+        }
       }
     } catch (err) {
-      console.error("Failed loading historical analytics:", err);
+      console.error("Failed loading global analytics:", err);
     } finally {
       setLoading(false);
+      setRefreshing(false);
     }
-  };
-
-  React.useEffect(() => {
-    loadAnalytics();
   }, []);
 
-  if (loading) {
-    return (
-      <div className="max-w-7xl mx-auto px-4 py-8 font-mono text-xs text-zinc-400">
-        <div className="flex items-center gap-2">
-          <div className="h-4 w-4 border-2 border-accent-cyan border-t-transparent rounded-full animate-spin" />
-          <span>Compiling Historical Performance Analytics...</span>
-        </div>
-      </div>
-    );
-  }
+  React.useEffect(() => {
+    fetchAnalytics(range);
+  }, [range, fetchAnalytics]);
 
-  if (!data) {
-    return (
-      <div className="max-w-7xl mx-auto px-4 py-8 font-mono text-xs text-zinc-400">
-        <p>No historical analytics data available.</p>
-        <Button variant="secondary" onClick={loadAnalytics} className="mt-4">
-          Retry
-        </Button>
-      </div>
-    );
-  }
+  const maxMonthHours = React.useMemo(() => {
+    if (!data || data.monthlyTrends.length === 0) return 200;
+    const max = Math.max(...data.monthlyTrends.map((m) => Math.max(m.actualHours, m.plannedHours)));
+    return Math.max(max, 100);
+  }, [data]);
 
   return (
-    <div className="max-w-7xl mx-auto px-4 py-6 space-y-6 font-mono text-xs text-zinc-200">
-      {/* HEADER */}
-      <div className="flex flex-col md:flex-row md:items-center justify-between gap-4 border-b border-border-subtle/80 pb-5">
-        <div>
-          <h1 className="text-sm font-semibold tracking-tight text-white uppercase flex items-center gap-2">
-            <Activity className="w-4 h-4 text-accent-cyan" /> Historical Performance Analytics
-          </h1>
-          <p className="text-[11px] text-zinc-500 mt-0.5">
-            // Canonical time-series performance analysis: Daily · Weekly · Monthly · Yearly.
+    <div className="w-full max-w-7xl mx-auto px-4 sm:px-6 py-6 space-y-8 text-zinc-100 font-sans">
+      
+      {/* 1. TOP HEADER & FILTER RUNWAY */}
+      <div className="flex flex-col md:flex-row md:items-center justify-between gap-4 border-b border-zinc-800/80 pb-5">
+        <div className="space-y-1">
+          <div className="flex items-center gap-2.5">
+            <div className="w-2 h-2 rounded-full bg-cyan-400 shadow-[0_0_8px_rgba(6,182,212,0.8)]" />
+            <h1 className="text-lg font-bold tracking-tight text-white flex items-center gap-2 font-mono">
+              <Activity className="w-4 h-4 text-cyan-400" />
+              GLOBAL WORK TIME ANALYTICS
+            </h1>
+          </div>
+          <p className="text-xs text-zinc-500 font-mono">
+            // Complete verified Work Time history from Windows Agent & Calendar plan.
           </p>
         </div>
 
-        {/* PERSPECTIVE SELECTOR TABS */}
-        <div className="flex items-center gap-1 bg-zinc-950 p-1 rounded-lg border border-border-subtle">
+        {/* TIME RANGE FILTER BUTTONS */}
+        <div className="flex items-center gap-2">
+          <div className="flex items-center gap-1 bg-zinc-950 p-1 rounded-xl border border-zinc-800 font-mono text-xs">
+            <button
+              onClick={() => setRange("all")}
+              className={`px-3 py-1.5 rounded-lg transition-all ${
+                range === "all"
+                  ? "bg-cyan-500 text-black font-bold shadow-[0_0_12px_rgba(6,182,212,0.3)]"
+                  : "text-zinc-400 hover:text-white"
+              }`}
+            >
+              All Time
+            </button>
+            <button
+              onClick={() => setRange("this_year")}
+              className={`px-3 py-1.5 rounded-lg transition-all ${
+                range === "this_year"
+                  ? "bg-cyan-500 text-black font-bold shadow-[0_0_12px_rgba(6,182,212,0.3)]"
+                  : "text-zinc-400 hover:text-white"
+              }`}
+            >
+              This Year
+            </button>
+            <button
+              onClick={() => setRange("prev_year")}
+              className={`px-3 py-1.5 rounded-lg transition-all ${
+                range === "prev_year"
+                  ? "bg-cyan-500 text-black font-bold shadow-[0_0_12px_rgba(6,182,212,0.3)]"
+                  : "text-zinc-400 hover:text-white"
+              }`}
+            >
+              Previous Year
+            </button>
+          </div>
+
           <button
-            onClick={() => setActiveTab("daily")}
-            className={`px-3 py-1 rounded text-xs font-bold uppercase transition-colors ${
-              activeTab === "daily" ? "bg-accent-cyan text-black" : "text-zinc-400 hover:text-white"
-            }`}
+            onClick={() => fetchAnalytics(range, true)}
+            disabled={refreshing}
+            className="p-2 rounded-xl border border-zinc-800 bg-zinc-950 hover:bg-zinc-900 text-zinc-400 hover:text-white transition-colors disabled:opacity-50"
+            title="Refresh analytics"
           >
-            Daily
-          </button>
-          <button
-            onClick={() => setActiveTab("weekly")}
-            className={`px-3 py-1 rounded text-xs font-bold uppercase transition-colors ${
-              activeTab === "weekly" ? "bg-accent-cyan text-black" : "text-zinc-400 hover:text-white"
-            }`}
-          >
-            Weekly
-          </button>
-          <button
-            onClick={() => setActiveTab("monthly")}
-            className={`px-3 py-1 rounded text-xs font-bold uppercase transition-colors ${
-              activeTab === "monthly" ? "bg-accent-cyan text-black" : "text-zinc-400 hover:text-white"
-            }`}
-          >
-            Monthly
-          </button>
-          <button
-            onClick={() => setActiveTab("yearly")}
-            className={`px-3 py-1 rounded text-xs font-bold uppercase transition-colors ${
-              activeTab === "yearly" ? "bg-accent-cyan text-black" : "text-zinc-400 hover:text-white"
-            }`}
-          >
-            Yearly
+            <RefreshCw size={13} className={refreshing ? "animate-spin text-cyan-400" : ""} />
           </button>
         </div>
       </div>
 
-      {/* ── DAILY VIEW ──────────────────────────────────────────────────────── */}
-      {activeTab === "daily" && (
-        <div className="space-y-4">
-          <div className="flex items-center justify-between">
-            <span className="text-zinc-400">
-              Rolling past 14 days of productive hours against the 8.0h workday standard.
-            </span>
-            <span className="text-[10px] text-zinc-500 uppercase font-bold">
-              Target: 8.0h / Weekday
-            </span>
+      {loading && !data ? (
+        <div className="flex items-center justify-center p-16 text-zinc-500 font-mono text-xs">
+          <div className="flex items-center gap-2">
+            <div className="w-2.5 h-2.5 rounded-full bg-cyan-400 animate-ping" />
+            <span>AGGREGATING_CANONICAL_WORK_TIME_DATA...</span>
           </div>
-
-          <div className="grid grid-cols-2 sm:grid-cols-4 md:grid-cols-7 gap-2.5">
-            {data.daily.map((d) => (
-              <div
-                key={d.date}
-                className={`p-3 rounded-xl border flex flex-col justify-between space-y-2 ${
-                  d.productiveHours >= 8.0
-                    ? "bg-accent-cyan/10 border-accent-cyan/40"
-                    : d.isWeekend
-                    ? "bg-zinc-950/40 border-zinc-900"
-                    : "bg-black/40 border-border-subtle"
-                }`}
-              >
-                <div>
-                  <div className="flex items-center justify-between">
-                    <span className="text-[9px] uppercase font-bold text-zinc-500">
-                      {d.dayOfWeek.slice(0, 3)}
-                    </span>
-                    <span className="text-[9px] text-zinc-600">{d.date.slice(5)}</span>
-                  </div>
-                  <div className="text-lg font-bold text-cyan-400 mt-1 font-mono">
-                    {d.productiveHours}h
-                  </div>
-                  <div className="text-[9px] text-zinc-500 font-mono">
-                    Actual Work
-                  </div>
-                </div>
-
-                <div className="pt-2 border-t border-zinc-900/80 flex items-center justify-between text-[9px]">
-                  <span className="text-zinc-500">Tgt: {d.targetHours}h</span>
-                  <span
-                    className={`font-bold ${
-                      d.variance >= 0 ? "text-success-emerald" : "text-danger-rose"
-                    }`}
-                  >
-                    {d.variance >= 0 ? `+${d.variance}h` : `${d.variance}h`}
-                  </span>
-                </div>
+        </div>
+      ) : !data || data.trackedDaysCount === 0 ? (
+        <div className="rounded-2xl border border-zinc-800 bg-zinc-950/60 p-12 text-center space-y-3 font-mono">
+          <Shield size={32} className="mx-auto text-zinc-600" />
+          <h2 className="text-base font-bold text-white">No Work Time Recorded Yet</h2>
+          <p className="text-xs text-zinc-500 max-w-md mx-auto">
+            Once the Windows Work Time Agent records active usage, your global analytics,
+            historical trends, and plan completion will appear here.
+          </p>
+        </div>
+      ) : (
+        <div className="space-y-8">
+          
+          {/* 2. CORE GLOBAL METRICS ROW (Primary 4 Cards) */}
+          <div className="grid grid-cols-1 sm:grid-cols-2 lg:grid-cols-4 gap-4">
+            
+            {/* Total Work */}
+            <div className="rounded-2xl border border-zinc-800/80 bg-zinc-950/70 p-5 space-y-2 relative overflow-hidden backdrop-blur-xl">
+              <div className="flex items-center justify-between text-xs font-mono uppercase tracking-wider text-cyan-400 font-medium">
+                <span>Total Work</span>
+                <Shield size={14} className="text-cyan-400" />
               </div>
-            ))}
-          </div>
-
-          <div className="border border-border-subtle bg-black/40 rounded-xl p-5 space-y-3">
-            <h2 className="text-white font-bold uppercase tracking-wider text-xs">
-              Daily Distribution Summary
-            </h2>
-            <div className="overflow-x-auto">
-              <table className="w-full text-left text-xs">
-                <thead>
-                  <tr className="border-b border-zinc-800 text-[10px] uppercase text-zinc-500">
-                    <th className="pb-2">Date</th>
-                    <th className="pb-2">Day</th>
-                    <th className="pb-2">Daily Target</th>
-                    <th className="pb-2">Actual Work</th>
-                    <th className="pb-2">Variance</th>
-                    <th className="pb-2 text-right">Status</th>
-                  </tr>
-                </thead>
-                <tbody className="divide-y divide-zinc-900 font-mono">
-                  {data.daily.map((d) => (
-                    <tr key={d.date} className="hover:bg-zinc-950/50 transition-colors">
-                      <td className="py-2 text-white font-bold">{d.date}</td>
-                      <td className="py-2 text-zinc-400">{d.dayOfWeek}</td>
-                      <td className="py-2 text-zinc-500">{d.targetHours}h</td>
-                      <td className="py-2 text-accent-cyan font-bold">{d.productiveHours}h</td>
-                      <td className="py-2">
-                        <span
-                          className={`font-bold ${
-                            d.variance >= 0 ? "text-success-emerald" : "text-danger-rose"
-                          }`}
-                        >
-                          {d.variance >= 0 ? `+${d.variance}h` : `${d.variance}h`}
-                        </span>
-                      </td>
-                      <td className="py-2 text-right">
-                        {d.metTarget ? (
-                          <span className="text-success-emerald font-bold text-[10px]">
-                            {d.isWeekend ? "Active Rest" : "Met Target ✅"}
-                          </span>
-                        ) : (
-                          <span className="text-zinc-600 text-[10px]">
-                            {d.isWeekend ? "Holiday" : "Under Target"}
-                          </span>
-                        )}
-                      </td>
-                    </tr>
-                  ))}
-                </tbody>
-              </table>
+              <div className="flex items-baseline gap-2">
+                <span className="text-3xl sm:text-4xl font-black font-mono text-white tracking-tight">
+                  {data.totalWorkFormatted}
+                </span>
+              </div>
+              <div className="text-[11px] text-zinc-500 font-mono flex items-center justify-between pt-1 border-t border-zinc-900">
+                <span>{data.totalWorkHours.toFixed(1)} verified hours</span>
+                <span className="text-zinc-400">{data.rangeLabel}</span>
+              </div>
             </div>
-          </div>
-        </div>
-      )}
 
-      {/* ── WEEKLY VIEW ─────────────────────────────────────────────────────── */}
-      {activeTab === "weekly" && (
-        <div className="space-y-4">
-          <div className="flex items-center justify-between">
-            <span className="text-zinc-400">
-              Recent 8 weeks of workweek execution vs 40.0h standard.
-            </span>
-            <span className="text-[10px] text-zinc-500 uppercase font-bold">
-              Standard: 40.0h / Week (5 Workdays × 8h)
-            </span>
-          </div>
-
-          <div className="grid grid-cols-1 md:grid-cols-2 lg:grid-cols-4 gap-3">
-            {data.weekly.map((w) => (
-              <div
-                key={`${w.year}-${w.weekNumber}`}
-                className="border border-border-subtle bg-black/40 rounded-xl p-4 space-y-3"
-              >
-                <div className="flex items-center justify-between">
-                  <span className="font-bold text-white">
-                    {w.year} · Week {w.weekNumber}
-                  </span>
-                  <span
-                    className={`px-1.5 py-0.5 rounded text-[9px] font-bold uppercase border ${
-                      w.status === "GREEN"
-                        ? "bg-success-emerald/10 border-success-emerald/30 text-success-emerald"
-                        : w.status === "YELLOW"
-                        ? "bg-warning-amber/10 border-warning-amber/30 text-warning-amber"
-                        : "bg-danger-rose/10 border-danger-rose/30 text-danger-rose"
-                    }`}
-                  >
-                    {w.status}
-                  </span>
-                </div>
-
-                <div className="text-[10px] text-zinc-500">
-                  {w.startDate} → {w.endDate}
-                </div>
-
-                <div className="grid grid-cols-2 gap-2 pt-2 border-t border-zinc-900">
-                  <div>
-                    <span className="text-[9px] uppercase text-zinc-500 block">Actual / Target</span>
-                    <span className="font-bold text-accent-cyan text-sm">{w.actualHours}h</span>
-                    <span className="text-[9px] text-zinc-600 block">/ {w.weeklyTarget}h</span>
-                  </div>
-
-                  <div>
-                    <span className="text-[9px] uppercase text-zinc-500 block">Workday Avg</span>
-                    <span className="font-bold text-white text-sm">{w.workdayAverage}h</span>
-                    <span className="text-[9px] text-zinc-600 block">Ideal: 8.0h</span>
-                  </div>
-                </div>
-
-                <div className="pt-2 border-t border-zinc-900 flex items-center justify-between text-[10px]">
-                  <span className="text-zinc-500">
-                    {w.recoveryRequired ? "Weekend Recovery" : "Clean Workweek"}
-                  </span>
-                  <span
-                    className={`font-bold ${
-                      w.variance >= 0 ? "text-success-emerald" : "text-danger-rose"
-                    }`}
-                  >
-                    {w.variance >= 0 ? `+${w.variance}h` : `${w.variance}h`}
-                  </span>
-                </div>
+            {/* Average Per Day */}
+            <div className="rounded-2xl border border-zinc-800/80 bg-zinc-950/70 p-5 space-y-2 backdrop-blur-xl">
+              <div className="text-xs font-mono uppercase tracking-wider text-zinc-400 font-medium flex items-center justify-between">
+                <span>Avg / Day</span>
+                <Clock size={14} className="text-zinc-500" />
               </div>
-            ))}
-          </div>
-        </div>
-      )}
-
-      {/* ── MONTHLY VIEW ────────────────────────────────────────────────────── */}
-      {activeTab === "monthly" && (
-        <div className="space-y-4">
-          <div className="flex items-center justify-between">
-            <span className="text-zinc-400">
-              Calendar month performance across {data.yearly[0]?.year || "the year"}.
-            </span>
-            <span className="text-[10px] text-zinc-500 uppercase font-bold">
-              Target Formula: Workdays × 8.0h
-            </span>
-          </div>
-
-          <div className="border border-border-subtle bg-black/40 rounded-xl p-5 space-y-4">
-            <div className="overflow-x-auto">
-              <table className="w-full text-left text-xs">
-                <thead>
-                  <tr className="border-b border-zinc-800 text-[10px] uppercase text-zinc-500">
-                    <th className="pb-2">Month</th>
-                    <th className="pb-2">Workdays</th>
-                    <th className="pb-2">Target</th>
-                    <th className="pb-2">Actual Work</th>
-                    <th className="pb-2">Workday Avg</th>
-                    <th className="pb-2">Completion %</th>
-                    <th className="pb-2">Surplus / Deficit</th>
-                    <th className="pb-2">Trend</th>
-                    <th className="pb-2 text-right">Status</th>
-                  </tr>
-                </thead>
-                <tbody className="divide-y divide-zinc-900 font-mono">
-                  {data.monthly.map((m) => (
-                    <tr key={m.month} className="hover:bg-zinc-950/50 transition-colors">
-                      <td className="py-2.5 font-bold text-white">{m.monthName}</td>
-                      <td className="py-2.5 text-zinc-400">{m.workdayCount}</td>
-                      <td className="py-2.5 text-zinc-400">{m.monthlyTarget}h</td>
-                      <td className="py-2.5 font-bold text-accent-cyan">{m.actualHours}h</td>
-                      <td className="py-2.5 text-white">{m.workdayAverage}h/day</td>
-                      <td className="py-2.5">
-                        <span
-                          className={`font-bold ${
-                            m.completionPercentage >= 100
-                              ? "text-success-emerald"
-                              : m.completionPercentage >= 75
-                              ? "text-warning-amber"
-                              : "text-danger-rose"
-                          }`}
-                        >
-                          {m.completionPercentage}%
-                        </span>
-                      </td>
-                      <td className="py-2.5">
-                        <span
-                          className={`font-bold ${
-                            m.variance >= 0 ? "text-success-emerald" : "text-danger-rose"
-                          }`}
-                        >
-                          {m.variance >= 0 ? `+${m.variance}h` : `${m.variance}h`}
-                        </span>
-                      </td>
-                      <td className="py-2.5 text-zinc-400 text-[10px] uppercase">{m.trend}</td>
-                      <td className="py-2.5 text-right">
-                        <span
-                          className={`px-1.5 py-0.5 rounded text-[9px] font-bold uppercase border ${
-                            m.status === "GREEN"
-                              ? "bg-success-emerald/10 border-success-emerald/30 text-success-emerald"
-                              : m.status === "YELLOW"
-                              ? "bg-warning-amber/10 border-warning-amber/30 text-warning-amber"
-                              : "bg-danger-rose/10 border-danger-rose/30 text-danger-rose"
-                          }`}
-                        >
-                          {m.status}
-                        </span>
-                      </td>
-                    </tr>
-                  ))}
-                </tbody>
-              </table>
+              <div className="text-3xl sm:text-4xl font-black font-mono text-cyan-400 tracking-tight">
+                {data.averagePerTrackedDayFormatted}
+              </div>
+              <div className="text-[11px] text-zinc-500 font-mono flex items-center justify-between pt-1 border-t border-zinc-900">
+                <span>Across {data.trackedDaysCount} tracked days</span>
+                <span>{data.averagePerTrackedDayHours.toFixed(2)}h/day</span>
+              </div>
             </div>
-          </div>
-        </div>
-      )}
 
-      {/* ── YEARLY VIEW ─────────────────────────────────────────────────────── */}
-      {activeTab === "yearly" && (
-        <div className="space-y-4">
-          <div className="flex items-center justify-between">
-            <span className="text-zinc-400">
-              Long-term annual totals and target achievement.
-            </span>
-          </div>
-
-          {data.yearly.map((y) => (
-            <div key={y.year} className="space-y-4">
-              <div className="grid grid-cols-2 sm:grid-cols-4 gap-4">
-                <div className="bg-black/40 border border-border-subtle rounded-xl p-4">
-                  <span className="text-[10px] text-zinc-500 uppercase block font-bold">
-                    Yearly Target
-                  </span>
-                  <div className="text-2xl font-bold text-white">{y.yearlyTargetHours}h</div>
-                  <span className="text-[10px] text-zinc-500">{y.totalWorkdays} Workdays × 8h</span>
-                </div>
-
-                <div className="bg-black/40 border border-border-subtle rounded-xl p-4">
-                  <span className="text-[10px] text-zinc-500 uppercase block font-bold">
-                    Actual Productive
-                  </span>
-                  <div className="text-2xl font-bold text-accent-cyan">
-                    {y.yearlyProductiveHours}h
-                  </div>
-                  <span className="text-[10px] text-zinc-500">
-                    {y.learningHours}h L + {y.huntingHours}h H
-                  </span>
-                </div>
-
-                <div className="bg-black/40 border border-border-subtle rounded-xl p-4">
-                  <span className="text-[10px] text-zinc-500 uppercase block font-bold">
-                    Achievement Rate
-                  </span>
-                  <div className="text-2xl font-bold text-white">{y.targetAchievement}%</div>
-                  <span
-                    className={`text-[10px] font-bold ${
-                      y.variance >= 0 ? "text-success-emerald" : "text-danger-rose"
-                    }`}
-                  >
-                    {y.variance >= 0 ? `+${y.variance}h Surplus` : `${y.variance}h Deficit`}
-                  </span>
-                </div>
-
-                <div className="bg-black/40 border border-border-subtle rounded-xl p-4">
-                  <span className="text-[10px] text-zinc-500 uppercase block font-bold">
-                    Annual Workday Avg
-                  </span>
-                  <div className="text-2xl font-bold text-white">{y.averageWorkdayHours}h/day</div>
-                  <span className="text-[10px] text-zinc-500">Ideal: 8.0h/day</span>
-                </div>
+            {/* Average Workday */}
+            <div className="rounded-2xl border border-zinc-800/80 bg-zinc-950/70 p-5 space-y-2 backdrop-blur-xl">
+              <div className="text-xs font-mono uppercase tracking-wider text-zinc-400 font-medium flex items-center justify-between">
+                <span>Avg / Workday</span>
+                <Calendar size={14} className="text-zinc-500" />
               </div>
+              <div className="text-3xl sm:text-4xl font-black font-mono text-white tracking-tight">
+                {data.averagePerWorkdayFormatted}
+              </div>
+              <div className="text-[11px] text-zinc-500 font-mono flex items-center justify-between pt-1 border-t border-zinc-900">
+                <span>Per planned workday</span>
+                <span>{data.plannedWorkdaysCount} workdays</span>
+              </div>
+            </div>
 
-              {/* MONTH-BY-MONTH PROGRESSION */}
-              <div className="border border-border-subtle bg-black/40 rounded-xl p-5 space-y-3">
-                <h2 className="text-white font-bold uppercase tracking-wider text-xs">
-                  Year {y.year} Monthly Trajectory
+            {/* Active Days */}
+            <div className="rounded-2xl border border-zinc-800/80 bg-zinc-950/70 p-5 space-y-2 backdrop-blur-xl">
+              <div className="text-xs font-mono uppercase tracking-wider text-zinc-400 font-medium flex items-center justify-between">
+                <span>Active Days</span>
+                <CheckCircle2 size={14} className="text-emerald-400" />
+              </div>
+              <div className="text-3xl sm:text-4xl font-black font-mono text-emerald-400 tracking-tight">
+                {data.activeDaysCount}
+              </div>
+              <div className="text-[11px] text-zinc-500 font-mono flex items-center justify-between pt-1 border-t border-zinc-900">
+                <span>Days with work &gt; 0h</span>
+                <span>{data.trackedDaysCount} recorded</span>
+              </div>
+            </div>
+
+          </div>
+
+          {/* 3. SECONDARY CONTEXT METRICS (Highest, Lowest, Plan Completion, Streak) */}
+          <div className="grid grid-cols-2 sm:grid-cols-4 gap-3">
+            
+            {/* Highest Day */}
+            <div className="rounded-xl border border-zinc-800/80 bg-zinc-950/60 p-4 space-y-1">
+              <div className="text-[11px] font-mono uppercase tracking-wider text-amber-400 flex items-center gap-1.5">
+                <Award size={12} /> Highest Day
+              </div>
+              <div className="text-xl font-bold font-mono text-white">
+                {data.highestDay ? data.highestDay.formattedDuration : "—"}
+              </div>
+              <div className="text-[10px] text-zinc-500 font-mono">
+                {data.highestDay ? data.highestDay.formattedDate : "No activity"}
+              </div>
+            </div>
+
+            {/* Lowest Active Day */}
+            <div className="rounded-xl border border-zinc-800/80 bg-zinc-950/60 p-4 space-y-1">
+              <div className="text-[11px] font-mono uppercase tracking-wider text-zinc-400 flex items-center gap-1.5">
+                <Clock size={12} /> Lowest Active Day
+              </div>
+              <div className="text-xl font-bold font-mono text-zinc-300">
+                {data.lowestActiveDay ? data.lowestActiveDay.formattedDuration : "—"}
+              </div>
+              <div className="text-[10px] text-zinc-500 font-mono">
+                {data.lowestActiveDay ? data.lowestActiveDay.formattedDate : "No activity"}
+              </div>
+            </div>
+
+            {/* Plan Completion % */}
+            <div className="rounded-xl border border-zinc-800/80 bg-zinc-950/60 p-4 space-y-1">
+              <div className="text-[11px] font-mono uppercase tracking-wider text-zinc-400 flex items-center gap-1.5">
+                <TrendingUp size={12} /> Plan Completion
+              </div>
+              <div className="text-xl font-bold font-mono text-white">
+                {data.planCompletionPercentage.toFixed(1)}%
+              </div>
+              <div className="text-[10px] text-zinc-500 font-mono">
+                {data.totalPlannedHours}h planned standard
+              </div>
+            </div>
+
+            {/* Tracking Streak */}
+            <div className="rounded-xl border border-zinc-800/80 bg-zinc-950/60 p-4 space-y-1">
+              <div className="text-[11px] font-mono uppercase tracking-wider text-cyan-400 flex items-center gap-1.5">
+                <Zap size={12} /> Active Streak
+              </div>
+              <div className="text-xl font-bold font-mono text-cyan-300">
+                {data.currentStreakDays} {data.currentStreakDays === 1 ? "day" : "days"}
+              </div>
+              <div className="text-[10px] text-zinc-500 font-mono">
+                Consecutive days active
+              </div>
+            </div>
+
+          </div>
+
+          {/* 4. HISTORICAL MONTHLY TREND (Visual Chart & Values) */}
+          <div className="rounded-2xl border border-zinc-800/80 bg-zinc-950/70 p-6 space-y-6 backdrop-blur-xl">
+            <div className="flex items-center justify-between border-b border-zinc-800/80 pb-4">
+              <div className="space-y-0.5">
+                <h2 className="text-sm font-bold uppercase tracking-wider text-white font-mono flex items-center gap-2">
+                  <BarChart3 size={15} className="text-cyan-400" />
+                  Monthly Work Time Trend
                 </h2>
-                <div className="grid grid-cols-3 sm:grid-cols-4 md:grid-cols-6 lg:grid-cols-12 gap-2 text-center">
-                  {y.monthlyTrend.map((m) => (
-                    <div
-                      key={m.month}
-                      className="p-2.5 rounded-lg border border-zinc-900 bg-zinc-950/50 space-y-1"
-                    >
-                      <span className="text-[9px] uppercase font-bold text-zinc-500 block">
+                <p className="text-xs text-zinc-500 font-mono">
+                  Actual verified Work Time per calendar month from Windows Agent.
+                </p>
+              </div>
+              <span className="text-xs font-mono text-zinc-400">
+                {data.monthlyTrends.length} {data.monthlyTrends.length === 1 ? "Month" : "Months"}
+              </span>
+            </div>
+
+            {/* Visual Bars Runway */}
+            <div className="space-y-4">
+              {/* Chronological list for chart */}
+              {[...data.monthlyTrends].reverse().map((m) => {
+                const actualWidthPercent = Math.min(100, Math.max(3, (m.actualHours / maxMonthHours) * 100));
+                const plannedWidthPercent = Math.min(100, Math.max(3, (m.plannedHours / maxMonthHours) * 100));
+                const metPlan = m.actualHours >= m.plannedHours;
+
+                return (
+                  <div key={m.month} className="space-y-1.5">
+                    <div className="flex items-baseline justify-between text-xs font-mono">
+                      <span className="font-bold text-white tracking-wide">
                         {m.monthName}
                       </span>
-                      <span className="text-sm font-bold text-white block">{m.hours}h</span>
+                      <div className="flex items-center gap-3">
+                        <span className="text-zinc-500 text-[11px]">
+                          Planned: {m.plannedHours}h
+                        </span>
+                        <span className={`font-bold ${metPlan ? "text-emerald-400" : "text-cyan-400"}`}>
+                          {m.actualFormatted}
+                        </span>
+                        <span className="text-[11px] text-zinc-400 font-semibold w-12 text-right">
+                          {m.completionPercentage}%
+                        </span>
+                      </div>
                     </div>
-                  ))}
-                </div>
+
+                    {/* Comparative Dual Bar */}
+                    <div className="w-full bg-zinc-900 rounded-full h-3.5 overflow-hidden border border-zinc-800/80 p-0.5 relative">
+                      {/* Actual Work Bar */}
+                      <div
+                        className={`h-full rounded-full transition-all duration-500 ${
+                          metPlan
+                            ? "bg-gradient-to-r from-emerald-500 to-teal-400 shadow-[0_0_10px_rgba(16,185,129,0.3)]"
+                            : "bg-gradient-to-r from-cyan-500 via-sky-500 to-blue-500 shadow-[0_0_10px_rgba(6,182,212,0.3)]"
+                        }`}
+                        style={{ width: `${actualWidthPercent}%` }}
+                      />
+                    </div>
+                  </div>
+                );
+              })}
+            </div>
+          </div>
+
+          {/* 5. PLANNED VS ACTUAL HISTORICAL PERFORMANCE TABLE */}
+          <div className="rounded-2xl border border-zinc-800/80 bg-zinc-950/70 overflow-hidden shadow-2xl backdrop-blur-xl">
+            <div className="p-5 border-b border-zinc-800/80 flex items-center justify-between">
+              <div className="space-y-0.5">
+                <h2 className="text-sm font-bold uppercase tracking-wider text-white font-mono flex items-center gap-2">
+                  <CalendarDays size={15} className="text-cyan-400" />
+                  Monthly Performance Breakdown
+                </h2>
+                <p className="text-xs text-zinc-500 font-mono">
+                  Comparative analysis of planned schedule vs authoritative actual work.
+                </p>
               </div>
             </div>
-          ))}
+
+            <div className="overflow-x-auto">
+              <table className="w-full text-left font-mono text-xs divide-y divide-zinc-900">
+                <thead className="bg-zinc-900/60 text-[11px] uppercase tracking-wider text-zinc-400">
+                  <tr>
+                    <th className="py-3 px-4 font-semibold">Month</th>
+                    <th className="py-3 px-4 font-semibold text-center">Planned Workdays</th>
+                    <th className="py-3 px-4 font-semibold text-right">Planned Hours</th>
+                    <th className="py-3 px-4 font-semibold text-right text-cyan-300">Actual Work</th>
+                    <th className="py-3 px-4 font-semibold text-center">Plan %</th>
+                    <th className="py-3 px-4 font-semibold text-center">Active Days</th>
+                    <th className="py-3 px-4 font-semibold text-right">Avg / Active Day</th>
+                  </tr>
+                </thead>
+                <tbody className="divide-y divide-zinc-900/80">
+                  {data.monthlyTrends.map((m) => {
+                    const met = m.actualHours >= m.plannedHours;
+                    return (
+                      <tr key={m.month} className="hover:bg-zinc-900/40 transition-colors">
+                        <td className="py-3.5 px-4 font-bold text-white whitespace-nowrap">
+                          {m.monthName}
+                        </td>
+                        <td className="py-3.5 px-4 text-center text-zinc-300">
+                          {m.plannedWorkdays}
+                        </td>
+                        <td className="py-3.5 px-4 text-right text-zinc-400">
+                          {m.plannedHours}h
+                        </td>
+                        <td className="py-3.5 px-4 text-right font-bold text-cyan-400 whitespace-nowrap">
+                          {m.actualFormatted}
+                        </td>
+                        <td className="py-3.5 px-4 text-center">
+                          <span
+                            className={`px-2 py-0.5 rounded text-[11px] font-bold ${
+                              met
+                                ? "bg-emerald-950/60 text-emerald-400 border border-emerald-800/40"
+                                : "bg-cyan-950/60 text-cyan-300 border border-cyan-800/40"
+                            }`}
+                          >
+                            {m.completionPercentage}%
+                          </span>
+                        </td>
+                        <td className="py-3.5 px-4 text-center text-zinc-300">
+                          {m.activeDays}
+                        </td>
+                        <td className="py-3.5 px-4 text-right text-zinc-300">
+                          {m.averagePerActiveDayFormatted}
+                        </td>
+                      </tr>
+                    );
+                  })}
+                </tbody>
+              </table>
+            </div>
+
+          </div>
+
+          {/* 6. COMPACT LIFETIME SUMMARY (Section 6 Standard) */}
+          <div className="rounded-2xl border border-zinc-800/80 bg-zinc-950/70 p-6 space-y-4 backdrop-blur-xl">
+            <div className="flex items-center justify-between border-b border-zinc-800/80 pb-3">
+              <span className="text-xs font-mono uppercase tracking-widest text-zinc-400 font-bold">
+                {data.rangeLabel.toUpperCase()} SUMMARY
+              </span>
+              <span className="text-[11px] font-mono text-zinc-500">
+                Authoritative Windows Agent Projection
+              </span>
+            </div>
+
+            <div className="grid grid-cols-2 sm:grid-cols-3 lg:grid-cols-6 gap-4 font-mono text-xs">
+              <div className="space-y-0.5">
+                <span className="text-zinc-500 text-[10px] uppercase block">Total Work</span>
+                <span className="text-base font-bold text-white">{data.totalWorkFormatted}</span>
+              </div>
+              <div className="space-y-0.5">
+                <span className="text-zinc-500 text-[10px] uppercase block">Average / Day</span>
+                <span className="text-base font-bold text-cyan-300">{data.averagePerTrackedDayFormatted}</span>
+              </div>
+              <div className="space-y-0.5">
+                <span className="text-zinc-500 text-[10px] uppercase block">Avg / Workday</span>
+                <span className="text-base font-bold text-white">{data.averagePerWorkdayFormatted}</span>
+              </div>
+              <div className="space-y-0.5">
+                <span className="text-zinc-500 text-[10px] uppercase block">Active Days</span>
+                <span className="text-base font-bold text-emerald-400">{data.activeDaysCount}</span>
+              </div>
+              <div className="space-y-0.5">
+                <span className="text-zinc-500 text-[10px] uppercase block">Planned Workdays</span>
+                <span className="text-base font-bold text-zinc-300">{data.plannedWorkdaysCount}</span>
+              </div>
+              <div className="space-y-0.5">
+                <span className="text-zinc-500 text-[10px] uppercase block">Plan Completion</span>
+                <span className="text-base font-bold text-cyan-400">{data.planCompletionPercentage.toFixed(1)}%</span>
+              </div>
+            </div>
+          </div>
+
         </div>
       )}
+
     </div>
   );
 }

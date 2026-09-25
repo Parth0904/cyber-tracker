@@ -2,7 +2,6 @@ import type { Metadata } from "next";
 import { Geist, Geist_Mono } from "next/font/google";
 import "./globals.css";
 import TopNavbar from "@/components/dashboard/TopNavbar";
-import { ConsistencyProvider } from "@/components/dashboard/ConsistencyTheme";
 import { ServiceWorkerRegister } from "@/components/ServiceWorkerRegister";
 
 const geistSans = Geist({
@@ -44,10 +43,8 @@ export default function RootLayout({
         <link rel="apple-touch-icon" href="/icons/icon-192.png" />
       </head>
       <body className="min-h-full flex flex-col">
-        <ConsistencyProvider>
-          <TopNavbar />
-          {children}
-        </ConsistencyProvider>
+        <TopNavbar />
+        {children}
         <ServiceWorkerRegister />
       </body>
     </html>

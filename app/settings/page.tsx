@@ -11,9 +11,15 @@ import {
   Loader2,
   Check,
   LogOut,
+  Share2,
+  Copy,
+  Trash2,
+  Plus,
+  ExternalLink,
 } from "lucide-react";
 import { useRouter } from "next/navigation";
 import { APP_TIMEZONE, getTodayDateString } from "@/lib/services/metrics/dates";
+import type { ParentPortalTokenRecord } from "@/lib/repositories/parentPortalTokens";
 
 export default function SettingsPage() {
   const router = useRouter();
@@ -21,85 +27,82 @@ export default function SettingsPage() {
   const [backupLoading, setBackupLoading] = useState(false);
   const [backupResult, setBackupResult] = useState<any>(null);
 
-  const [parentConfig, setParentConfig] = useState<any>({
-    enabled: 0,
-    parent_name: "",
-    delivery_method: "Email",
-    delivery_time: "20:00",
-    time_zone: APP_TIMEZONE,
-    email_address: "",
-    telegram_chat_id: "",
-  });
-  const [parentConfigLoading, setParentConfigLoading] = useState(true);
-  const [saveLoading, setSaveLoading] = useState(false);
-  const [testLoading, setTestLoading] = useState(false);
-  const [saveSuccess, setSaveSuccess] = useState(false);
-  const [testResult, setTestResult] = useState<string | null>(null);
+  // Parent Portal Share Tokens
+  const [parentTokens, setParentTokens] = useState<ParentPortalTokenRecord[]>([]);
+  const [tokensLoading, setTokensLoading] = useState(true);
+  const [createTokenLoading, setCreateTokenLoading] = useState(false);
+  const [revokeLoadingId, setRevokeLoadingId] = useState<string | null>(null);
+  const [tokenLabel, setTokenLabel] = useState("");
+  const [newTokenUrl, setNewTokenUrl] = useState<string | null>(null);
+  const [copiedKey, setCopiedKey] = useState<string | null>(null);
 
-  useEffect(() => {
-    async function fetchParentConfig() {
-      try {
-        const res = await fetch("/api/settings/parent-report");
-        if (res.ok) {
-          const data = await res.json();
-          if (data.config) {
-            setParentConfig(data.config);
-          }
-        }
-      } catch (err) {
-        console.error("Failed to load parent report settings:", err);
-      } finally {
-        setParentConfigLoading(false);
-      }
-    }
-    fetchParentConfig();
-  }, []);
-
-  async function handleSaveParentConfig(e: React.FormEvent) {
-    e.preventDefault();
-    setSaveLoading(true);
-    setSaveSuccess(false);
+  const fetchParentTokens = async () => {
     try {
-      const res = await fetch("/api/settings/parent-report", {
-        method: "POST",
-        headers: { "Content-Type": "application/json" },
-        body: JSON.stringify(parentConfig),
-      });
+      const res = await fetch("/api/settings/parent-token");
       if (res.ok) {
-        setSaveSuccess(true);
-        setTimeout(() => setSaveSuccess(false), 3000);
+        const json = await res.json();
+        if (json.tokens) {
+          setParentTokens(json.tokens);
+        }
       }
     } catch (err) {
-      console.error("Failed to save parent report settings:", err);
+      console.error("Failed loading parent portal tokens:", err);
     } finally {
-      setSaveLoading(false);
+      setTokensLoading(false);
+    }
+  };
+
+  useEffect(() => {
+    fetchParentTokens();
+  }, []);
+
+  async function handleCreateParentToken(e?: React.FormEvent) {
+    if (e) e.preventDefault();
+    setCreateTokenLoading(true);
+    try {
+      const res = await fetch("/api/settings/parent-token", {
+        method: "POST",
+        headers: { "Content-Type": "application/json" },
+        body: JSON.stringify({ label: tokenLabel.trim() || null }),
+      });
+      if (res.ok) {
+        const json = await res.json();
+        const origin = typeof window !== "undefined" ? window.location.origin : "";
+        const shareUrl = `${origin}/parent/${json.token}`;
+        setNewTokenUrl(shareUrl);
+        setTokenLabel("");
+        await fetchParentTokens();
+      }
+    } catch (err) {
+      console.error("Failed generating parent portal share link:", err);
+    } finally {
+      setCreateTokenLoading(false);
     }
   }
 
-  async function handleTestParentReport() {
-    setTestLoading(true);
-    setTestResult(null);
+  async function handleRevokeParentToken(id: string) {
+    setRevokeLoadingId(id);
     try {
-      await fetch("/api/settings/parent-report", {
+      const res = await fetch("/api/settings/parent-token/revoke", {
         method: "POST",
         headers: { "Content-Type": "application/json" },
-        body: JSON.stringify(parentConfig),
+        body: JSON.stringify({ id }),
       });
-
-      const res = await fetch("/api/settings/parent-report/test", {
-        method: "POST",
-      });
-      const data = await res.json();
       if (res.ok) {
-        setTestResult("Test report sent successfully. Check system logs / console.");
-      } else {
-        setTestResult(`Error: ${data.error || "Failed to dispatch test report."}`);
+        setNewTokenUrl(null);
+        await fetchParentTokens();
       }
-    } catch (err: any) {
-      setTestResult(`Error: ${err.message || "Failed to initiate test report dispatch."}`);
+    } catch (err) {
+      console.error("Failed revoking parent portal share link:", err);
     } finally {
-      setTestLoading(false);
+      setRevokeLoadingId(null);
     }
+  }
+
+  function handleCopyUrl(url: string, key: string) {
+    navigator.clipboard.writeText(url);
+    setCopiedKey(key);
+    setTimeout(() => setCopiedKey(null), 2500);
   }
 
 
@@ -272,118 +275,140 @@ export default function SettingsPage() {
         </div>
       </section>
 
-      {/* Parent Reports */}
+      {/* Parent Portal */}
       <section className="settings-section">
         <div className="section-header">
-          <FileText size={18} />
-          <h2>Parent Weekly Report Automation</h2>
+          <Share2 size={18} />
+          <h2>Parent Portal</h2>
         </div>
-        <div className="section-body">
+        <div className="section-body space-y-4">
           <p className="section-description">
-            Automatically compile and deliver progress reports (Week number, Consistency signal, Hunting hours, Study hours, and Findings count) to a configured parent every Sunday.
+            Share a secure, read-only link with parents. They can immediately observe monthly schedules, planned workdays, and live verified work hours without creating an account or logging in. Parents cannot edit or modify any data.
           </p>
-          {parentConfigLoading ? (
+
+          {/* Newly Generated Link Callout */}
+          {newTokenUrl && (
+            <div className="p-4 rounded-xl border border-cyan-500/50 bg-cyan-950/30 space-y-2.5">
+              <div className="flex items-center justify-between">
+                <span className="text-xs font-bold text-cyan-400 uppercase tracking-wider flex items-center gap-1.5 font-mono">
+                  <Check size={14} /> New Parent Link Ready
+                </span>
+                <button
+                  type="button"
+                  onClick={() => setNewTokenUrl(null)}
+                  className="text-zinc-500 hover:text-white text-xs"
+                >
+                  Dismiss
+                </button>
+              </div>
+              <p className="text-xs text-zinc-300">
+                Copy and send this link to the parent. The complete share URL is only displayed once:
+              </p>
+              <div className="flex items-center gap-2">
+                <input
+                  type="text"
+                  readOnly
+                  value={newTokenUrl}
+                  className="w-full bg-black/60 border border-zinc-800 rounded-lg px-3 py-2 text-xs font-mono text-cyan-300 select-all"
+                />
+                <button
+                  type="button"
+                  onClick={() => handleCopyUrl(newTokenUrl, "new")}
+                  className="px-3.5 py-2 rounded-lg bg-cyan-500 hover:bg-cyan-400 text-black font-bold text-xs flex items-center gap-1.5 shrink-0 transition-colors"
+                >
+                  {copiedKey === "new" ? <Check size={14} /> : <Copy size={14} />}
+                  {copiedKey === "new" ? "Copied!" : "Copy Link"}
+                </button>
+              </div>
+            </div>
+          )}
+
+          {tokensLoading ? (
             <div className="loading-settings flex items-center gap-2 text-xs font-mono text-zinc-500 py-2">
-              <Loader2 size={14} className="spin" /> LOADING_SETTINGS_MATRIX...
+              <Loader2 size={14} className="spin" /> LOADING_PORTAL_TOKENS...
+            </div>
+          ) : parentTokens.filter((t) => !t.revoked_at).length === 0 ? (
+            <div className="rounded-xl border border-zinc-900 bg-black/40 p-6 text-center space-y-3">
+              <p className="text-xs text-zinc-500">No active parent link.</p>
+              <div className="flex flex-col sm:flex-row items-center justify-center gap-2 max-w-md mx-auto">
+                <input
+                  type="text"
+                  placeholder="Optional label (e.g. Mom & Dad)"
+                  value={tokenLabel}
+                  onChange={(e) => setTokenLabel(e.target.value)}
+                  className="w-full bg-zinc-950 border border-zinc-800 rounded-lg px-3 py-1.5 text-xs text-white"
+                />
+                <button
+                  type="button"
+                  onClick={() => handleCreateParentToken()}
+                  disabled={createTokenLoading}
+                  className="settings-btn primary shrink-0 text-xs w-full sm:w-auto"
+                >
+                  {createTokenLoading ? <Loader2 size={14} className="spin" /> : <Plus size={14} />}
+                  Create Parent Link
+                </button>
+              </div>
             </div>
           ) : (
-            <form onSubmit={handleSaveParentConfig} className="settings-form">
-              <div className="form-group toggle-group">
-                <label className="checkbox-label">
-                  <input
-                    type="checkbox"
-                    checked={parentConfig.enabled === 1}
-                    onChange={(e) => setParentConfig({ ...parentConfig, enabled: e.target.checked ? 1 : 0 })}
-                  />
-                  <span>Enable Parent Report Automation</span>
-                </label>
-              </div>
-
-              {parentConfig.enabled === 1 && (
-                <div className="expanded-settings-fields space-y-4 mt-4">
-                  <div className="form-grid">
-                    <div className="form-group">
-                      <label>Parent Name</label>
-                      <input
-                        type="text"
-                        placeholder="e.g. John Doe"
-                        value={parentConfig.parent_name}
-                        onChange={(e) => setParentConfig({ ...parentConfig, parent_name: e.target.value })}
-                        required
-                      />
-                    </div>
-
-                    <div className="form-group">
-                      <label>Parent's Email Address</label>
-                      <input
-                        type="email"
-                        placeholder="e.g. parent@example.com"
-                        value={parentConfig.email_address}
-                        onChange={(e) => setParentConfig({ ...parentConfig, email_address: e.target.value })}
-                        required
-                      />
-                    </div>
-                  </div>
-
-                  <div className="form-grid">
-                    <div className="form-group">
-                      <label>Delivery Time (24h Format)</label>
-                      <input
-                        type="text"
-                        placeholder="e.g. 20:00"
-                        value={parentConfig.delivery_time}
-                        onChange={(e) => setParentConfig({ ...parentConfig, delivery_time: e.target.value })}
-                        pattern="^([0-1]?[0-9]|2[0-3]):[0-5][0-9]$"
-                        required
-                      />
-                    </div>
-
-                    <div className="form-group">
-                      <label>Time Zone</label>
-                      <input
-                        type="text"
-                        placeholder="e.g. UTC, Asia/Kolkata"
-                        value={parentConfig.time_zone}
-                        onChange={(e) => setParentConfig({ ...parentConfig, time_zone: e.target.value })}
-                        required
-                      />
-                    </div>
-                  </div>
-                </div>
-              )}
-
-              <div className="form-actions mt-6 flex gap-3">
-                <button
-                  type="submit"
-                  className="settings-btn primary"
-                  disabled={saveLoading}
-                >
-                  {saveLoading ? <Loader2 size={16} className="spin" /> : <Check size={16} />}
-                  {saveLoading ? "Saving..." : saveSuccess ? "Saved Successfully!" : "Save Settings"}
-                </button>
-
-                {parentConfig.enabled === 1 && (
-                  <button
-                    type="button"
-                    onClick={handleTestParentReport}
-                    className="settings-btn secondary"
-                    disabled={testLoading}
+            <div className="space-y-3">
+              {parentTokens
+                .filter((t) => !t.revoked_at)
+                .map((token) => (
+                  <div
+                    key={token.id}
+                    className="flex flex-col sm:flex-row sm:items-center justify-between gap-3 p-4 rounded-xl border border-zinc-800 bg-zinc-950/60"
                   >
-                    {testLoading ? <Loader2 size={16} className="spin" /> : <FileText size={16} />}
-                    {testLoading ? "Dispatching..." : "Send Test Report"}
-                  </button>
-                )}
-              </div>
+                    <div className="space-y-1">
+                      <div className="flex items-center gap-2">
+                        <span className="text-xs font-bold text-white">
+                          {token.label || "Parent Access Link"}
+                        </span>
+                        <span className="text-[10px] font-mono px-2 py-0.5 rounded-full bg-emerald-950 text-emerald-400 border border-emerald-800/40 uppercase font-bold">
+                          Active
+                        </span>
+                      </div>
+                      <p className="text-[11px] text-zinc-500 font-mono">
+                        Created: {new Date(token.created_at).toLocaleDateString()}
+                      </p>
+                    </div>
 
-              {testResult && (
-                <div className={`test-result-box mt-3 text-xs p-3 rounded font-mono border
-                  ${testResult.startsWith("Error") 
-                    ? "bg-danger-rose/10 border-danger-rose/30 text-danger-rose" 
-                    : "bg-success-emerald/10 border-success-emerald/30 text-success-emerald"}`}>
-                  {testResult}
-                </div>
-              )}
-            </form>
+                    <div className="flex items-center gap-2">
+                      <button
+                        type="button"
+                        onClick={() => handleRevokeParentToken(token.id)}
+                        disabled={revokeLoadingId === token.id}
+                        className="px-3 py-1.5 rounded-lg border border-red-900/40 bg-red-950/20 hover:bg-red-950/40 text-red-400 text-xs font-medium flex items-center gap-1.5 transition-colors"
+                      >
+                        {revokeLoadingId === token.id ? (
+                          <Loader2 size={13} className="spin" />
+                        ) : (
+                          <Trash2 size={13} />
+                        )}
+                        Revoke Link
+                      </button>
+                    </div>
+                  </div>
+                ))}
+
+              <div className="pt-2 flex flex-col sm:flex-row items-center gap-2">
+                <input
+                  type="text"
+                  placeholder="Label for another link (e.g. Family)"
+                  value={tokenLabel}
+                  onChange={(e) => setTokenLabel(e.target.value)}
+                  className="w-full sm:w-64 bg-zinc-950 border border-zinc-800 rounded-lg px-3 py-1.5 text-xs text-white"
+                />
+                <button
+                  type="button"
+                  onClick={() => handleCreateParentToken()}
+                  disabled={createTokenLoading}
+                  className="settings-btn secondary text-xs w-full sm:w-auto"
+                >
+                  {createTokenLoading ? <Loader2 size={14} className="spin" /> : <Plus size={14} />}
+                  Create Another Link
+                </button>
+              </div>
+            </div>
           )}
         </div>
       </section>

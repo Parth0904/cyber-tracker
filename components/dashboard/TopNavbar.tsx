@@ -4,19 +4,18 @@ import * as React from "react";
 import Link from "next/link";
 import { usePathname } from "next/navigation";
 import { 
-  Calendar, FileText, Activity, Settings
+  Calendar, Activity, Settings
 } from "lucide-react";
 
 export default function TopNavbar() {
   const pathname = usePathname();
 
-  if (pathname === "/login") {
+  if (pathname === "/login" || pathname?.startsWith("/parent")) {
     return null;
   }
 
   const navItems = [
     { href: "/", label: "Calendar", icon: <Calendar size={13} /> },
-    { href: "/reviews", label: "Reviews", icon: <FileText size={13} /> },
     { href: "/analytics", label: "Analytics", icon: <Activity size={13} /> },
   ];
 

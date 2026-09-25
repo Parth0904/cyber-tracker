@@ -5,6 +5,8 @@ import {
   calculateMonthCalendar,
   getEffectiveStatus,
   formatHoursMinutes,
+  formatRequiredPace,
+  formatDailyTarget,
 } from "../lib/services/calendar/monthlyCalendar";
 
 test("Monthly Calendar Planner — Core Calculation & Invariant Tests", async (t) => {
@@ -393,7 +395,277 @@ test("Monthly Calendar Planner — Core Calculation & Invariant Tests", async (t
     assert.equal(report.requiredHours, 176);
     assert.ok(typeof report.actualWorkFormatted === "string");
     assert.ok(typeof report.averageHoursPerWorkdayFormatted === "string");
+    assert.ok(typeof report.requiredDailyPaceFormatted === "string");
+  });
+
+  // 9. 10-HOUR CAP ON REQUIRED WORK ALLOCATION
+  await t.test("19. 10-hour cap: formatRequiredPace and calculateMonthCalendar return '10+ hr needed' when pace >= 10", () => {
+    assert.equal(formatRequiredPace(10.0), "10+ hr needed");
+    assert.equal(formatRequiredPace(10.5), "10+ hr needed");
+    assert.equal(formatRequiredPace(16.0), "10+ hr needed");
+    assert.equal(formatRequiredPace(9.99), "9h 59m");
+    assert.equal(formatRequiredPace(8.0), "8h 00m");
+
+    // Case: Month with 2 remaining workdays, but 24 hours remaining -> 12h/day required
+    // Work: 160h worked out of 184h required (say 23 workdays), 24h remaining across 2 remaining workdays
+    const res = calculateMonthCalendar({
+      year: 2026,
+      month: 9,
+      // As of Sept 29 (Tuesday): remaining workdays are Sept 29, Sept 30 (2 days)
+      // Total required = 22 * 8 = 176h. Worked = 152h. Remaining = 24h.
+      // Pace = 24 / 2 = 12h/day >= 10h cap -> "10+ hr needed"
+      workSecondsMap: { "2026-09-01": 152 * 3600 },
+      asOfDateStr: "2026-09-29",
+      timezone: tz,
+    });
+
+    assert.equal(res.remainingWorkdays, 2);
+    assert.equal(res.remainingHours, 24);
+    assert.equal(res.requiredDailyPace, 12);
+    assert.equal(res.requiredDailyPaceFormatted, "10+ hr needed");
+  });
+
+  await t.test("20. 10-hour cap: normal pace under 10h displays exact hours and minutes", () => {
+    // 2 workdays left, 16h remaining -> 8h/day required
+    const res = calculateMonthCalendar({
+      year: 2026,
+      month: 9,
+      workSecondsMap: { "2026-09-01": 160 * 3600 },
+      asOfDateStr: "2026-09-29",
+      timezone: tz,
+    });
+
+    assert.equal(res.remainingWorkdays, 2);
+    assert.equal(res.remainingHours, 16);
+    assert.equal(res.requiredDailyPace, 8);
+    assert.equal(res.requiredDailyPaceFormatted, "8h 00m");
+  });
+
+  await t.test("21. Fresh month invariant: each month is independent with no cross-month debt carried over", () => {
+    // September has deficit: 0h worked out of 176h
+    const sept = calculateMonthCalendar({
+      year: 2026,
+      month: 9,
+      workSecondsMap: {},
+      asOfDateStr: "2026-09-30",
+      timezone: tz,
+    });
+    assert.equal(sept.actualWorkedHours, 0);
+    assert.equal(sept.remainingHours, 176);
+
+    // October starts completely fresh with standard required hours = plannedWorkdays * 8
+    const oct = calculateMonthCalendar({
+      year: 2026,
+      month: 10,
+      workSecondsMap: {},
+      asOfDateStr: "2026-10-01",
+      timezone: tz,
+    });
+    // October 2026 has 22 workdays (22 * 8 = 176h)
+    assert.equal(oct.plannedWorkdays, 22);
+    assert.equal(oct.monthlyRequiredHours, 176);
+    assert.equal(oct.remainingHours, 176);
+    assert.equal(oct.requiredDailyPace, 8); // 176 / 22 = 8h/day, zero deficit carried
+    assert.equal(oct.requiredDailyPaceFormatted, "8h 00m");
+  });
+
+  // 10. DAILY TARGET PER-CELL DISTRIBUTION & 10-HOUR CAP TESTS (Section 11 Spec)
+  await t.test("22. Fresh month per-cell targets: WORKDAY cells show 8h target, HOLIDAY cells show 0h target", () => {
+    // September 2026: 30 days, 22 workdays (starts Sept 1, Tuesday)
+    const res = calculateMonthCalendar({
+      year: 2026,
+      month: 9,
+      asOfDateStr: "2026-09-01",
+      timezone: tz,
+    });
+
+    const workdays = res.days.filter((d) => d.plannedStatus === "WORKDAY");
+    const holidays = res.days.filter((d) => d.plannedStatus === "HOLIDAY");
+
+    assert.equal(workdays.length, 22);
+    assert.equal(holidays.length, 8);
+
+    // Every WORKDAY in fresh month has Target: 8h
+    for (const d of workdays) {
+      assert.equal(d.dailyTargetHours, 8, `Workday ${d.date} must have 8h target`);
+      assert.equal(d.dailyTargetFormatted, "Target: 8h", `Workday ${d.date} formatted must be Target: 8h`);
+    }
+
+    // Every HOLIDAY in fresh month has Target: 0h
+    for (const d of holidays) {
+      assert.equal(d.dailyTargetHours, 0, `Holiday ${d.date} must have 0h target`);
+      assert.equal(d.dailyTargetFormatted, "Target: 0h", `Holiday ${d.date} formatted must be Target: 0h`);
+    }
+  });
+
+  await t.test("23. Deficit distribution (Prompt Example 3): 160h required, 130h worked, 30h remaining across 5 workdays -> 6h target per remaining cell", () => {
+    // Feb 2026 has 20 workdays (Feb 1 is Sunday, Feb 2-6 (5), Feb 9-13 (5), Feb 16-20 (5), Feb 23-27 (5))
+    // Total required = 20 * 8 = 160h.
+    // As of Feb 23 (Monday): 15 workdays in past (Feb 2-20), 5 remaining workdays (Feb 23-27).
+    // Actual work completed = 130h. Remaining required work = 30h. Remaining WORKDAYs = 5.
+    // Target for each of the 5 remaining WORKDAYs = 30 / 5 = 6h.
+    const res = calculateMonthCalendar({
+      year: 2026,
+      month: 2,
+      workSecondsMap: { "2026-02-02": 130 * 3600 },
+      asOfDateStr: "2026-02-23",
+      timezone: tz,
+    });
+
+    assert.equal(res.monthlyRequiredHours, 160);
+    assert.equal(res.actualWorkedHours, 130);
+    assert.equal(res.remainingHours, 30);
+    assert.equal(res.remainingWorkdays, 5);
+    assert.equal(res.requiredDailyPace, 6);
+    assert.equal(res.requiredDailyPaceFormatted, "6h 00m");
+
+    // All 5 remaining workdays (Feb 23, 24, 25, 26, 27) must show Target: 6h
+    const remainingWorkdays = res.days.filter((d) => d.date >= "2026-02-23" && d.plannedStatus === "WORKDAY");
+    assert.equal(remainingWorkdays.length, 5);
+    for (const d of remainingWorkdays) {
+      assert.equal(d.dailyTargetHours, 6, `Remaining workday ${d.date} target must be 6h`);
+      assert.equal(d.dailyTargetFormatted, "Target: 6h", `Remaining workday ${d.date} must display Target: 6h`);
+    }
+
+    // Historical completed workdays (Feb 2..20) must retain standard Target: 8h
+    const pastWorkdays = res.days.filter((d) => d.date < "2026-02-23" && d.plannedStatus === "WORKDAY");
+    assert.equal(pastWorkdays.length, 15);
+    for (const d of pastWorkdays) {
+      assert.equal(d.dailyTargetHours, 8, `Past workday ${d.date} must retain 8h target`);
+      assert.equal(d.dailyTargetFormatted, "Target: 8h", `Past workday ${d.date} must display Target: 8h`);
+    }
+
+    // Holidays (weekends) must retain Target: 0h
+    const holidays = res.days.filter((d) => d.plannedStatus === "HOLIDAY");
+    for (const d of holidays) {
+      assert.equal(d.dailyTargetHours, 0);
+      assert.equal(d.dailyTargetFormatted, "Target: 0h");
+    }
+  });
+
+  await t.test("24. Dynamic redistribution: when actual work increases, deficit decreases and per-day target recalculates", () => {
+    // 5 remaining workdays (Feb 23-27).
+    // If user works 10h on Feb 23, total work becomes 140h.
+    // As of Feb 24 (Tuesday): remaining workdays are 4 (Feb 24-27).
+    // Remaining hours = 160 - 140 = 20h. Remaining workdays = 4.
+    // Target for each of the 4 remaining workdays = 20 / 4 = 5h.
+    const res = calculateMonthCalendar({
+      year: 2026,
+      month: 2,
+      workSecondsMap: {
+        "2026-02-02": 130 * 3600,
+        "2026-02-23": 10 * 3600,
+      },
+      asOfDateStr: "2026-02-24",
+      timezone: tz,
+    });
+
+    assert.equal(res.monthlyRequiredHours, 160);
+    assert.equal(res.actualWorkedHours, 140);
+    assert.equal(res.remainingHours, 20);
+    assert.equal(res.remainingWorkdays, 4);
+    assert.equal(res.requiredDailyPace, 5);
+    assert.equal(res.requiredDailyPaceFormatted, "5h 00m");
+
+    const remainingWorkdays = res.days.filter((d) => d.date >= "2026-02-24" && d.plannedStatus === "WORKDAY");
+    assert.equal(remainingWorkdays.length, 4);
+    for (const d of remainingWorkdays) {
+      assert.equal(d.dailyTargetHours, 5);
+      assert.equal(d.dailyTargetFormatted, "Target: 5h");
+    }
+
+    // Yesterday Feb 23 is now past and retains 8h historical target
+    const feb23 = res.days.find((d) => d.date === "2026-02-23");
+    assert.equal(feb23?.isPast, true);
+    assert.equal(feb23?.dailyTargetHours, 8);
+    assert.equal(feb23?.dailyTargetFormatted, "Target: 8h");
+  });
+
+  await t.test("25. Holidays: excluded from deficit distribution and receive 0h target", () => {
+    // 5 days left in Feb 2026 (Feb 23-27).
+    // User marks Feb 25 (Wednesday) as HOLIDAY.
+    // Now remaining workdays = 4 (Feb 23, 24, 26, 27).
+    // Planned workdays in month decreases from 20 to 19 -> required = 19 * 8 = 152h.
+    // Completed = 120h. Remaining = 32h across 4 remaining workdays -> 8h/day.
+    const res = calculateMonthCalendar({
+      year: 2026,
+      month: 2,
+      overrides: {
+        "2026-02-25": { status: "HOLIDAY", topic: "Day Off" },
+      },
+      workSecondsMap: { "2026-02-02": 120 * 3600 },
+      asOfDateStr: "2026-02-23",
+      timezone: tz,
+    });
+
+    assert.equal(res.plannedWorkdays, 19);
+    assert.equal(res.monthlyRequiredHours, 152);
+    assert.equal(res.remainingHours, 32);
+    assert.equal(res.remainingWorkdays, 4);
+
+    const feb25 = res.days.find((d) => d.date === "2026-02-25");
+    assert.equal(feb25?.plannedStatus, "HOLIDAY");
+    assert.equal(feb25?.dailyTargetHours, 0);
+    assert.equal(feb25?.dailyTargetFormatted, "Target: 0h");
+
+    const remainingWorkdays = res.days.filter((d) => d.date >= "2026-02-23" && d.plannedStatus === "WORKDAY");
+    assert.equal(remainingWorkdays.length, 4);
+    for (const d of remainingWorkdays) {
+      assert.equal(d.dailyTargetHours, 8);
+      assert.equal(d.dailyTargetFormatted, "Target: 8h");
+    }
+  });
+
+  await t.test("26. 10-hour cap in day cells: calculated target >= 10h displays '10+ hr needed'", () => {
+    // 2 workdays left (Sept 29, 30), 24h remaining -> 12h/day
+    const res = calculateMonthCalendar({
+      year: 2026,
+      month: 9,
+      workSecondsMap: { "2026-09-01": 152 * 3600 },
+      asOfDateStr: "2026-09-29",
+      timezone: tz,
+    });
+
+    assert.equal(res.remainingWorkdays, 2);
+    assert.equal(res.requiredDailyPace, 12);
+    assert.equal(res.requiredDailyPaceFormatted, "10+ hr needed");
+
+    const sept29 = res.days.find((d) => d.date === "2026-09-29");
+    const sept30 = res.days.find((d) => d.date === "2026-09-30");
+
+    assert.equal(sept29?.dailyTargetHours, 12);
+    assert.equal(sept29?.dailyTargetFormatted, "10+ hr needed");
+    assert.equal(sept30?.dailyTargetHours, 12);
+    assert.equal(sept30?.dailyTargetFormatted, "10+ hr needed");
+  });
+
+  await t.test("27. Calendar UI preservation: MonthlyCalendarView defines 7-column grid layout and no list layout", async () => {
+    const fs = await import("fs/promises");
+    const path = await import("path");
+    const viewCode = await fs.readFile(
+      path.join(process.cwd(), "components", "calendar", "MonthlyCalendarView.tsx"),
+      "utf-8"
+    );
+
+    // Verify 7-column grid headers and grid styling
+    assert.ok(viewCode.includes("grid-cols-7"), "Must use grid-cols-7 layout");
+    assert.ok(
+      viewCode.includes('gridTemplateColumns: "repeat(7, minmax(0, 1fr))"'),
+      "Must have explicit 7-column inline CSS grid style"
+    );
+    assert.ok(viewCode.includes("overflow-x-auto"), "Must have horizontal scroll preservation wrapper");
+    assert.ok(viewCode.includes("min-w-[700px]"), "Must have minimum width for 7 columns");
+
+    // Verify day cell displays distributed target
+    assert.ok(viewCode.includes("day.dailyTargetFormatted"), "Day cell must display dailyTargetFormatted");
+
+    // Verify weekday headers
+    const weekdayHeaders = ["Mon", "Tue", "Wed", "Thu", "Fri", "Sat", "Sun"];
+    for (const h of weekdayHeaders) {
+      assert.ok(viewCode.includes(`"${h}"`), `Must include weekday header ${h}`);
+    }
   });
 });
+
 
 

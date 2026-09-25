@@ -141,7 +141,7 @@ export default function DayEditorModal({
               onClick={() => setSelectedStatus("HOLIDAY")}
               className={`flex flex-col items-center justify-center p-3 rounded-xl border transition-all text-xs font-mono ${
                 selectedStatus === "HOLIDAY"
-                  ? "bg-amber-950/40 border-amber-500/60 text-amber-300 shadow-[0_0_15px_rgba(245,158,11,0.15)]"
+                  ? "bg-red-950/50 border-red-500/60 text-red-300 shadow-[0_0_15px_rgba(239,68,68,0.15)]"
                   : "bg-zinc-900/60 border-zinc-800 text-zinc-400 hover:border-zinc-700 hover:text-zinc-200"
               }`}
             >

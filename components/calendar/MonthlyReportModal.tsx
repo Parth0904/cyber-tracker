@@ -132,6 +132,17 @@ export default function MonthlyReportModal({
             </span>
           </div>
 
+          {!report.isCompleted && !isMet && (
+            <div className="flex items-center justify-between p-3.5 hover:bg-zinc-900/60 transition-colors">
+              <span className="text-zinc-400 flex items-center gap-2">
+                <TrendingUp size={13} className="text-zinc-500" /> Required Pace
+              </span>
+              <span className={`font-bold text-sm ${report.requiredDailyPace >= 10 ? "text-amber-400" : "text-white"}`}>
+                {report.requiredDailyPaceFormatted}
+              </span>
+            </div>
+          )}
+
           <div className="flex items-center justify-between p-3.5 hover:bg-zinc-900/60 transition-colors">
             <span className="text-zinc-400 flex items-center gap-2">
               <CheckCircle2 size={13} className="text-zinc-500" /> Days Worked

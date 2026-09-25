@@ -28,6 +28,7 @@ export async function GET() {
       monthlyWorkedHours: cal.actualWorkedHours,
       monthlyRemainingHours: cal.remainingHours,
       requiredDailyPace: cal.requiredDailyPace,
+      requiredDailyPaceFormatted: cal.requiredDailyPaceFormatted,
     });
   } catch (err: any) {
     console.error("Daily target route error:", err);

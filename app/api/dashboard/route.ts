@@ -1,6 +1,5 @@
 import { NextResponse } from "next/server";
 import { getTodayEntry } from "@/lib/repositories/dailyEntries";
-import { calculateConsistency } from "@/lib/services/metrics/consistency";
 import { APP_TIMEZONE, getTodayDateString } from "@/lib/services/metrics/dates";
 import { getMonthCalendar } from "@/lib/services/calendar/monthlyCalendar";
 
@@ -9,9 +8,8 @@ export async function GET() {
     const today = getTodayDateString(APP_TIMEZONE);
     const [year, month] = today.split("-").map(Number);
 
-    const [entry, consistencyInfo, calendar] = await Promise.all([
+    const [entry, calendar] = await Promise.all([
       getTodayEntry(today),
-      calculateConsistency(),
       getMonthCalendar(year, month, today, APP_TIMEZONE),
     ]);
 
@@ -34,7 +32,6 @@ export async function GET() {
           notes: entry?.notes || "",
         },
       },
-      consistency: consistencyInfo,
     });
   } catch (error: any) {
     console.error("Dashboard API error:", error);
