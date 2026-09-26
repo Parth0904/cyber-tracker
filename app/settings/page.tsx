@@ -15,7 +15,6 @@ import {
   Copy,
   Trash2,
   Plus,
-  ExternalLink,
 } from "lucide-react";
 import { useRouter } from "next/navigation";
 import { APP_TIMEZONE, getTodayDateString } from "@/lib/services/metrics/dates";
@@ -336,7 +335,8 @@ export default function SettingsPage() {
                   placeholder="Optional label (e.g. Mom & Dad)"
                   value={tokenLabel}
                   onChange={(e) => setTokenLabel(e.target.value)}
-                  className="w-full bg-zinc-950 border border-zinc-800 rounded-lg px-3 py-1.5 text-xs text-white"
+                  disabled={createTokenLoading}
+                  className="w-full bg-zinc-950 border border-zinc-800 rounded-lg px-3 py-1.5 text-xs text-white disabled:opacity-50"
                 />
                 <button
                   type="button"
@@ -377,7 +377,7 @@ export default function SettingsPage() {
                         type="button"
                         onClick={() => handleRevokeParentToken(token.id)}
                         disabled={revokeLoadingId === token.id}
-                        className="px-3 py-1.5 rounded-lg border border-red-900/40 bg-red-950/20 hover:bg-red-950/40 text-red-400 text-xs font-medium flex items-center gap-1.5 transition-colors"
+                        className="px-3 py-1.5 rounded-lg border border-red-900/40 bg-red-950/20 hover:bg-red-950/40 text-red-400 text-xs font-medium flex items-center gap-1.5 transition-colors disabled:opacity-50"
                       >
                         {revokeLoadingId === token.id ? (
                           <Loader2 size={13} className="spin" />
@@ -396,7 +396,8 @@ export default function SettingsPage() {
                   placeholder="Label for another link (e.g. Family)"
                   value={tokenLabel}
                   onChange={(e) => setTokenLabel(e.target.value)}
-                  className="w-full sm:w-64 bg-zinc-950 border border-zinc-800 rounded-lg px-3 py-1.5 text-xs text-white"
+                  disabled={createTokenLoading}
+                  className="w-full sm:w-64 bg-zinc-950 border border-zinc-800 rounded-lg px-3 py-1.5 text-xs text-white disabled:opacity-50"
                 />
                 <button
                   type="button"
@@ -548,86 +549,6 @@ export default function SettingsPage() {
           margin-top: 0.25rem;
           padding-top: 0.5rem;
           border-top: 1px solid rgba(16, 185, 129, 0.15);
-        }
-
-        .settings-form {
-          display: flex;
-          flex-direction: column;
-          gap: 1rem;
-        }
-
-        .form-grid {
-          display: grid;
-          grid-template-columns: 1fr;
-          gap: 1rem;
-        }
-
-        @media (min-width: 640px) {
-          .form-grid {
-            grid-template-columns: 1fr 1fr;
-          }
-        }
-
-        .form-group {
-          display: flex;
-          flex-direction: column;
-          gap: 0.35rem;
-        }
-
-        .form-group.toggle-group {
-          padding-top: 0.25rem;
-        }
-
-        .form-group label {
-          font-size: 0.8rem;
-          font-weight: 600;
-          color: #94a3b8;
-          text-transform: uppercase;
-          font-family: monospace;
-          letter-spacing: 0.05em;
-        }
-
-        .form-group input,
-        .form-group select {
-          padding: 0.6rem 0.8rem;
-          background: rgba(15, 23, 42, 0.6);
-          border: 1px solid rgba(99, 102, 241, 0.2);
-          border-radius: 8px;
-          color: #f1f5f9;
-          font-size: 0.85rem;
-          font-family: inherit;
-        }
-
-        .form-group input:focus,
-        .form-group select:focus {
-          outline: none;
-          border-color: #6366f1;
-        }
-
-        .checkbox-label {
-          display: flex;
-          align-items: center;
-          gap: 0.6rem;
-          cursor: pointer;
-          font-size: 0.85rem;
-          color: #c7d2fe;
-          font-weight: 600;
-        }
-
-        .checkbox-label input[type="checkbox"] {
-          width: 0.95rem;
-          height: 0.95rem;
-          accent-color: #6366f1;
-        }
-
-        .form-actions {
-          display: flex;
-          gap: 0.75rem;
-        }
-
-        .test-result-box {
-          white-space: pre-wrap;
-          line-height: 1.4;
         }
 
         @keyframes spin {

@@ -9,9 +9,9 @@ import {
   FileText,
   RefreshCw,
   Tag,
-  Clock,
   CheckCircle2,
-  TrendingUp,
+  Loader2,
+  AlertCircle,
 } from "lucide-react";
 import type {
   MonthlyCalendarView as MonthlyCalendarViewType,
@@ -29,6 +29,7 @@ export default function MonthlyCalendarView() {
   const [calendarData, setCalendarData] = React.useState<MonthlyCalendarViewType | null>(null);
   const [loading, setLoading] = React.useState<boolean>(true);
   const [refreshing, setRefreshing] = React.useState<boolean>(false);
+  const [error, setError] = React.useState<string | null>(null);
 
   // Day editor modal state
   const [editingDay, setEditingDay] = React.useState<MonthlyCalendarDay | null>(null);
@@ -37,10 +38,12 @@ export default function MonthlyCalendarView() {
   // Monthly report modal state
   const [reportData, setReportData] = React.useState<MonthlyCalendarReport | null>(null);
   const [isReportOpen, setIsReportOpen] = React.useState<boolean>(false);
+  const [reportLoading, setReportLoading] = React.useState<boolean>(false);
 
   const fetchCalendar = React.useCallback(async (year: number, month: number, isSilent = false) => {
     if (!isSilent) setLoading(true);
     else setRefreshing(true);
+    setError(null);
 
     try {
       const res = await fetch(`/api/calendar?year=${year}&month=${month}`);
@@ -48,10 +51,15 @@ export default function MonthlyCalendarView() {
         const json = await res.json();
         if (json.success && json.calendar) {
           setCalendarData(json.calendar);
+        } else {
+          setError(json.error || "Failed to load calendar data.");
         }
+      } else {
+        setError(`Calendar API returned ${res.status}`);
       }
     } catch (err) {
       console.error("Failed to load monthly calendar data:", err);
+      setError("Network error while loading calendar planner.");
     } finally {
       setLoading(false);
       setRefreshing(false);
@@ -135,6 +143,7 @@ export default function MonthlyCalendarView() {
 
   // Monthly Report handler
   const handleOpenReport = async () => {
+    setReportLoading(true);
     try {
       const res = await fetch(`/api/calendar/report?year=${currentYear}&month=${currentMonth}`);
       if (res.ok) {
@@ -146,15 +155,101 @@ export default function MonthlyCalendarView() {
       }
     } catch (err) {
       console.error("Failed to load monthly report:", err);
+    } finally {
+      setReportLoading(false);
     }
   };
 
   if (loading && !calendarData) {
     return (
-      <div className="flex-1 flex items-center justify-center p-12 bg-black text-zinc-400 font-mono text-xs">
-        <div className="flex items-center gap-2">
-          <div className="w-2.5 h-2.5 rounded-full bg-cyan-400 animate-ping" />
-          <span>LOADING_MONTHLY_CALENDAR_PLANNER...</span>
+      <div className="w-full max-w-7xl mx-auto px-4 sm:px-6 py-6 space-y-6 text-zinc-100 font-sans">
+        {/* Top Header Skeleton */}
+        <div className="flex flex-col sm:flex-row sm:items-center justify-between gap-4 border-b border-zinc-800/80 pb-5">
+          <div className="space-y-2">
+            <div className="h-6 w-64 bg-zinc-800/60 rounded animate-pulse" />
+            <div className="h-3 w-80 bg-zinc-900 rounded animate-pulse" />
+          </div>
+          <div className="flex items-center gap-2">
+            <div className="h-8 w-8 bg-zinc-900 rounded-lg animate-pulse" />
+            <div className="h-8 w-28 bg-zinc-900 rounded-lg animate-pulse" />
+            <div className="h-8 w-16 bg-zinc-900 rounded-lg animate-pulse" />
+          </div>
+        </div>
+
+        {/* Navigation Bar Skeleton */}
+        <div className="flex items-center justify-between bg-zinc-950/70 border border-zinc-800/80 rounded-2xl p-4">
+          <div className="h-8 w-32 bg-zinc-900 rounded-xl animate-pulse" />
+          <div className="space-y-1.5 flex flex-col items-center">
+            <div className="h-6 w-44 bg-zinc-800/60 rounded animate-pulse" />
+            <div className="h-3 w-36 bg-zinc-900 rounded animate-pulse" />
+          </div>
+          <div className="h-8 w-32 bg-zinc-900 rounded-xl animate-pulse" />
+        </div>
+
+        {/* Metric Cards Skeleton */}
+        <div className="grid grid-cols-2 sm:grid-cols-3 lg:grid-cols-6 gap-3">
+          {Array.from({ length: 6 }).map((_, i) => (
+            <div key={i} className="rounded-xl border border-zinc-800/80 bg-zinc-950/60 p-4 space-y-2">
+              <div className="h-3 w-16 bg-zinc-800/60 rounded animate-pulse" />
+              <div className="h-7 w-20 bg-zinc-800/40 rounded animate-pulse" />
+              <div className="h-2.5 w-12 bg-zinc-900 rounded animate-pulse" />
+            </div>
+          ))}
+        </div>
+
+        {/* Calendar Grid Skeleton */}
+        <div className="rounded-2xl border border-zinc-800/80 bg-zinc-950/70 p-4 sm:p-5 overflow-hidden">
+          <div className="overflow-x-auto">
+            <div className="min-w-[700px]">
+              <div className="grid grid-cols-7 gap-2 mb-3">
+                {["Mon", "Tue", "Wed", "Thu", "Fri", "Sat", "Sun"].map((d) => (
+                  <div key={d} className="h-6 bg-zinc-900/60 rounded text-center text-xs font-mono text-zinc-600 flex items-center justify-center font-bold">
+                    {d}
+                  </div>
+                ))}
+              </div>
+              <div
+                className="grid grid-cols-7 gap-2"
+                style={{ gridTemplateColumns: "repeat(7, minmax(0, 1fr))" }}
+              >
+                {Array.from({ length: 35 }).map((_, i) => (
+                  <div
+                    key={i}
+                    className="min-h-[115px] rounded-xl border border-zinc-900 bg-zinc-950/40 p-2.5 flex flex-col justify-between"
+                  >
+                    <div className="flex items-center justify-between">
+                      <div className="h-3.5 w-5 bg-zinc-800/50 rounded animate-pulse" />
+                      <div className="h-3 w-10 bg-zinc-900 rounded animate-pulse" />
+                    </div>
+                    <div className="space-y-1.5 my-auto">
+                      <div className="h-3 w-14 bg-zinc-900 rounded animate-pulse" />
+                      <div className="h-2 w-10 bg-zinc-900/50 rounded animate-pulse" />
+                    </div>
+                    <div className="h-2.5 w-16 bg-zinc-900/80 rounded animate-pulse" />
+                  </div>
+                ))}
+              </div>
+            </div>
+          </div>
+        </div>
+      </div>
+    );
+  }
+
+  if (error && !calendarData) {
+    return (
+      <div className="w-full max-w-7xl mx-auto px-4 sm:px-6 py-12 text-center font-mono space-y-4">
+        <div className="inline-flex items-center gap-2 p-3 bg-red-950/40 border border-red-800/40 rounded-xl text-red-300 text-xs">
+          <AlertCircle size={15} />
+          <span>{error}</span>
+        </div>
+        <div>
+          <button
+            onClick={() => fetchCalendar(currentYear, currentMonth)}
+            className="px-4 py-2 rounded-xl bg-zinc-900 border border-zinc-700 text-xs font-mono text-white hover:bg-zinc-800 transition-colors"
+          >
+            Retry Loading Calendar
+          </button>
         </div>
       </div>
     );
@@ -204,9 +299,14 @@ export default function MonthlyCalendarView() {
 
           <button
             onClick={handleOpenReport}
-            className="inline-flex items-center gap-1.5 px-3 py-1.5 rounded-lg border border-zinc-800 bg-zinc-950 hover:bg-zinc-900 hover:border-zinc-700 text-xs font-mono font-bold text-zinc-300 hover:text-cyan-300 transition-colors"
+            disabled={reportLoading}
+            className="inline-flex items-center gap-1.5 px-3 py-1.5 rounded-lg border border-zinc-800 bg-zinc-950 hover:bg-zinc-900 hover:border-zinc-700 text-xs font-mono font-bold text-zinc-300 hover:text-cyan-300 transition-colors disabled:opacity-50"
           >
-            <FileText size={13} className="text-cyan-400" />
+            {reportLoading ? (
+              <Loader2 size={13} className="animate-spin text-cyan-400" />
+            ) : (
+              <FileText size={13} className="text-cyan-400" />
+            )}
             Monthly Report
           </button>
 
@@ -230,8 +330,9 @@ export default function MonthlyCalendarView() {
         </button>
 
         <div className="text-center">
-          <h2 className="text-xl sm:text-2xl font-black tracking-tight text-white font-mono">
-            {calendarData?.monthName} {calendarData?.year}
+          <h2 className="text-xl sm:text-2xl font-black tracking-tight text-white font-mono flex items-center justify-center gap-2">
+            <span>{calendarData?.monthName} {calendarData?.year}</span>
+            {loading && <Loader2 size={16} className="animate-spin text-cyan-400 inline" />}
           </h2>
           <span className="text-[11px] font-mono text-zinc-500 uppercase tracking-widest">
             {calendarData?.totalDays} Days · {calendarData?.plannedWorkdays} Planned Workdays
@@ -340,7 +441,7 @@ export default function MonthlyCalendarView() {
       </div>
 
       {/* 4. CALENDAR GRID */}
-      <div className="rounded-2xl border border-zinc-800/80 bg-zinc-950/70 backdrop-blur-xl overflow-hidden shadow-2xl">
+      <div className={`rounded-2xl border border-zinc-800/80 bg-zinc-950/70 backdrop-blur-xl overflow-hidden shadow-2xl transition-opacity duration-150 ${loading ? "opacity-60 pointer-events-none" : "opacity-100"}`}>
         <div className="overflow-x-auto">
           <div className="min-w-[700px]">
             {/* Day-of-week Headers */}

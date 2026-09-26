@@ -1,7 +1,7 @@
 "use client";
 
 import * as React from "react";
-import { X, Calendar, Shield, Tag, RotateCcw, Check, Sparkles } from "lucide-react";
+import { X, Calendar, Shield, Tag, RotateCcw, Check, Loader2 } from "lucide-react";
 import type { MonthlyCalendarDay } from "@/lib/services/calendar/monthlyCalendar";
 
 interface DayEditorModalProps {
@@ -22,6 +22,7 @@ export default function DayEditorModal({
   const [selectedStatus, setSelectedStatus] = React.useState<"WORKDAY" | "HOLIDAY">("WORKDAY");
   const [topic, setTopic] = React.useState("");
   const [saving, setSaving] = React.useState(false);
+  const [savingType, setSavingType] = React.useState<"save" | "revert" | null>(null);
   const [error, setError] = React.useState<string | null>(null);
 
   React.useEffect(() => {
@@ -36,6 +37,7 @@ export default function DayEditorModal({
 
   const handleSave = async () => {
     setSaving(true);
+    setSavingType("save");
     setError(null);
     try {
       await onSave(day.date, selectedStatus, topic);
@@ -44,11 +46,13 @@ export default function DayEditorModal({
       setError(err.message || "Failed to save changes.");
     } finally {
       setSaving(false);
+      setSavingType(null);
     }
   };
 
   const handleRevert = async () => {
     setSaving(true);
+    setSavingType("revert");
     setError(null);
     try {
       await onRevert(day.date);
@@ -57,6 +61,7 @@ export default function DayEditorModal({
       setError(err.message || "Failed to revert day.");
     } finally {
       setSaving(false);
+      setSavingType(null);
     }
   };
 
@@ -222,8 +227,12 @@ export default function DayEditorModal({
                 className="inline-flex items-center gap-1.5 px-3 py-1.5 rounded-lg border border-zinc-800 text-xs text-zinc-400 hover:text-white hover:border-zinc-700 transition-colors font-mono disabled:opacity-50"
                 title="Reset this day back to default calendar status and remove topic"
               >
-                <RotateCcw size={12} />
-                Revert to Default
+                {savingType === "revert" ? (
+                  <Loader2 size={12} className="animate-spin text-zinc-400" />
+                ) : (
+                  <RotateCcw size={12} />
+                )}
+                {savingType === "revert" ? "Reverting..." : "Revert to Default"}
               </button>
             )}
           </div>
@@ -243,7 +252,10 @@ export default function DayEditorModal({
               disabled={saving}
               className="px-5 py-2 rounded-xl bg-cyan-500 hover:bg-cyan-400 text-black text-xs font-bold transition-all shadow-[0_0_15px_rgba(6,182,212,0.4)] disabled:opacity-50 flex items-center gap-1.5"
             >
-              {saving ? "Saving..." : "Save Changes"}
+              {savingType === "save" && (
+                <Loader2 size={13} className="animate-spin text-black" />
+              )}
+              {savingType === "save" ? "Saving..." : "Save Changes"}
             </button>
           </div>
         </div>

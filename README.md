@@ -1,132 +1,151 @@
-# Cyber Tracker v1.0 — Production Operations Guide
+# Cyber Tracker — Production Operations Guide
 
-Cyber Tracker is a personal operational intelligence system designed for security engineers, bug bounty hunters, and researchers. It enables tracking target research sessions, learning topics, submitted findings, daily habits, and core habit consistency using completely objective telemetry and correlation diagnostics.
-
----
-
-## 1. Project Overview
-
-Cyber Tracker acts as a personal performance analyst. Rather than a motivational tracking tool, it uses mathematical correlations (e.g. reading habits vs session duration) to outline optimal working patterns and output actionable target rotation recommendations.
+Cyber Tracker is a precision work-time tracking and monthly planning system designed for rigorous focus, schedule clarity, and verified computer activity.
 
 ---
 
-## 2. System Architecture
+## 1. System Overview
 
-```mermaid
-graph TD
-    UI[Next.js 16 Dashboard UI] -->|HTTP Request| API[Next.js API Route Handlers]
-    API -->|Session Wrapper Auth| Auth[NextAuth.js Proxy]
-    API -->|Query Abstraction| DB[better-sqlite3 / pg Pool]
-    DB -->|Relational Data| Repositories[Repository Abstractions]
-    Repositories -->|Telemetry Averages| StatsService[Statistics Service Layer]
-    StatsService -->|Joint Probability Analysis| TelemetryEngine[Correlation Telemetry Engine]
-    TelemetryEngine -->|Structured Executive Review| ReviewGenerator[Weekly Review Generator]
-    ReviewGenerator -->|Send Automated Digest| ParentScheduler[Parent Report Scheduler]
-    ParentScheduler -->|Dispatch Providers| Providers[Email / Telegram Provider]
+Cyber Tracker combines three core components:
+
+1. **Monthly Calendar Planner**:
+   - Monthly schedule grid with default working days (Monday–Friday: 8h standard) and holidays (Saturday–Sunday: 0h).
+   - Dynamic deficit redistribution across remaining workdays in the active month.
+   - 10+ hr cap warning when required daily pace reaches or exceeds 10 hours.
+   - Zero cross-month debt carryover (each calendar month is strictly independent).
+   - Customizable day overrides (Workday / Holiday) and metadata topics.
+
+2. **Windows Work Time Agent**:
+   - Lightweight, standalone background daemon running on Windows.
+   - Monitors user input, display state, lock/unlock events, and system sleep/shutdown.
+   - Records verified productive computer time into local SQLite (`agent/data/agent.db`).
+   - Automatically synchronizes to the production backend (`/api/agent/sync`) using a dedicated machine-to-machine `AGENT_SYNC_TOKEN`.
+   - Fully resilient: offline operation preserves all tracked sessions locally and retries safely with backoff.
+
+3. **Global Work Time Analytics**:
+   - Long-term verified work history compiled from the Windows Agent and Calendar.
+   - Filterable across All Time, This Year, and Previous Year.
+   - Historical monthly performance trends, streaks, and plan completion percentages.
+
+4. **Parent Portal**:
+   - Tokenized, secure, strictly read-only view accessible by parents via unique share link.
+   - Immediate access without accounts, passwords, or login prompts.
+   - Displays monthly schedule, planned requirements, and live verified hours.
+   - Links can be created, labeled, and instantly revoked from Admin Settings.
+
+---
+
+## 2. Architecture
+
+```text
+[ Windows Work Time Agent ]
+        │  (Monitors local OS user input & display state)
+        ▼
+   agent.db (Local SQLite)
+        │
+        │  POST /api/agent/sync
+        │  (Authorization: Bearer <AGENT_SYNC_TOKEN>)
+        ▼
+[ Next.js API Routes ] ───► [ PostgreSQL / Neon ]
+        ▲                         │
+        │                         ├─► work_time_daily (Authoritative work history)
+        ├─► /api/calendar         ├─► calendar_overrides (Custom day status & topics)
+        ├─► /api/analytics        ├─► parent_portal_tokens (SHA-256 hashed share links)
+        └─► /api/parent/[token]   └─► settings
+        ▲
+        │
+[ Web Frontend ]
+   ├─► / (Monthly Calendar Planner)
+   ├─► /analytics (Global Work Time Analytics)
+   ├─► /settings (Tokens, Export, Backups)
+   └─► /parent/[token] (Read-Only Parent Portal)
 ```
 
 ---
 
-## 3. Tech Stack & Dependencies
+## 3. Tech Stack
 
-- **Core**: Next.js 16 (App Router + Turbopack)
-- **Styling**: TailwindCSS 4 (Utility Runway styling)
-- **Database**: Dual-driver abstraction (SQLite for local development, PostgreSQL for cloud staging/production)
-- **Authentication**: Auth.js (NextAuth) proxy handler
-- **Date calculations**: `date-fns` (ISO weeks and calendars mapping)
-- **Icons**: `lucide-react` (Monochrome dashboard telemetry icons)
-
----
-
-## 4. Folder Structure
-
-```
-├── app/                       # Next.js App Router root
-│   ├── api/                   # Server API route endpoints
-│   │   ├── auth/              # Auth.js NextAuth proxy handlers
-│   │   ├── reviews/           # Weekly reviews & cron controllers
-│   │   └── settings/          # Config backup, export, and parent reports
-│   ├── reviews/               # Executive review timeline & report cards
-│   ├── settings/              # Settings panel & parent configurations
-│   └── (dashboard paths)      # Console, Targets, Learning, Sessions, History
-├── components/                # Reusable React UI component nodes
-│   ├── dashboard/             # Console telemetry & habits forms
-│   └── ui/                    # Base panel, badge, and empty state boxes
-├── lib/                       # Business logic and database layers
-│   ├── database/              # DB connection, migrations, query routers
-│   ├── repositories/          # SQL queries abstractions
-│   └── services/              # Core stats, correlations, parent scheduler
-├── public/                    # Manifest, PWA service workers, static assets
-├── scripts/                   # Database schemas and Postgres setup scripts
-├── tsconfig.json              # TypeScript compilation setup
-└── eslint.config.mjs          # Production ESLint overrides config
-```
+- **Framework**: Next.js 16 (App Router + Turbopack)
+- **Language**: TypeScript 5
+- **Styling**: TailwindCSS 4 + Vanilla CSS Design System
+- **Database**: PostgreSQL (Neon in production) via `pg` driver; local SQLite fallback via `better-sqlite3`
+- **Agent**: Node.js Windows Background Service (`agent/src/index.ts`)
+- **Icons**: `lucide-react`
+- **Date calculations**: `date-fns` (strictly Asia/Kolkata timezone)
 
 ---
 
-## 5. Setup & Development
+## 4. Environment Variables
 
-### Prerequisite Environment Variables
 Create a `.env` file in the workspace root:
-```env
-NEXTAUTH_SECRET=a_secure_random_string_of_at_least_32_characters
-NEXTAUTH_URL=http://localhost:3000
-# Database defaults: If DATABASE_URL is left empty, SQLite is automatically selected.
-# DATABASE_URL=postgresql://user:password@localhost:5432/cyber_tracker
 
-# Optional Cron Secret for production backup endpoints
+```env
+# Required for Web Application
+AUTH_SECRET=your_32_character_random_hex_secret
+AUTH_PASSWORD=your_admin_login_password
+DATABASE_URL=postgresql://user:password@ep-host.neon.tech/neondb?sslmode=require
+
+# Required for Machine-to-Machine Agent Sync
+AGENT_SYNC_TOKEN=your_64_character_hex_agent_sync_token
+
+# Windows Agent Configuration (for local agent running on Windows)
+CYBER_TRACKER_API_URL=https://your-production-app.vercel.app
+# CYBER_AGENT_IDLE_MINUTES=5
+# CYBER_AGENT_SYNC_INTERVAL_SECONDS=15
+
+# Optional Cron Secret for production backup endpoint
 # CRON_SECRET=your_production_cron_secret
 ```
 
-### Installation
+---
+
+## 5. Development & Running Locally
+
+### Install Dependencies
 ```bash
 npm install
 ```
 
-### Development Server Run
+### Run Web Development Server
 ```bash
 npm run dev
 ```
-Open [http://localhost:3000](http://localhost:3000) to access the console.
+Open [http://localhost:3000](http://localhost:3000).
+
+### Run Windows Agent (Development Mode)
+```bash
+npm run agent:dev
+```
+
+### Install Windows Agent as a Scheduled Task (Production)
+Run PowerShell as Administrator:
+```powershell
+npm run agent:install
+```
+Check agent status:
+```powershell
+npm run agent:check
+```
 
 ---
 
-## 6. Production Deployment
+## 6. Testing & Verification
 
-### Building & Compilation
-Compile assets and verify TypeScript type safety:
 ```bash
+# Run Monthly Calendar Planner & Parent Portal verification tests
+npm run test:calendar
+
+# Run Windows Agent state machine & synchronization durability tests
+npm run agent:test
+
+# Verify production Next.js compilation
 npm run build
 ```
 
-### Vercel Deployment Settings
-1. Bind environment variables (`NEXTAUTH_SECRET`, `NEXTAUTH_URL`, `DATABASE_URL` for PostgreSQL).
-2. Configure **Cron Jobs** (`vercel.json` scheduler) for automated daily database backups:
-   - Target cron endpoint for database backup: `/api/settings/backup` (POST)
-
 ---
 
-## 7. Database Driver & Migrations
+## 7. Security Invariants
 
-Cyber Tracker employs a dynamic database router:
-- **SQLite Configuration**: Runs synchronously using `better-sqlite3` on a local file database (`cyber-tracker.db`). Migrations are automatically loaded by scanning files in `lib/database/schema/*.sql`.
-- **Postgres Configuration**: Triggered when `DATABASE_URL` is set in production. Runs queries asynchronously via `pg` connection pool. Initialize remote Postgres schemas using:
-  ```bash
-  npx ts-node scripts/postgres-init.ts
-  ```
-
----
-
-## 8. Authentication & Authorization
-
-Authentication is managed via NextAuth proxy handlers:
-- **Development mode**: Middleware checks are mapped in [proxy.ts](file:///c:/Users/parth/Desktop/Parth/Web%20development/cyber-tracker/proxy.ts) using the Next.js 16 route proxy specifications.
-- **Access control**: Session validation prevents unauthenticated requests from fetching api metrics or viewing settings panels.
-
----
-
-## 9. Future Roadmap
-
-- **WhatsApp Business Provider**: Add a WhatsApp notification provider implementing the `NotificationProvider` interface.
-- **OAuth Login Integrations**: Add Google, GitHub, or Okta SSO logins in `lib/auth.ts`.
-- **Telemetry Charts extension**: Introduce custom timeframes (e.g. 90-day rolling averages) in Analytics grids.
+- **Parent Portal is strictly read-only**: Rejects all write methods (`POST`, `PUT`, `DELETE`, `PATCH`) with HTTP 405. Raw tokens are never stored in the database; only SHA-256 hashes are persisted.
+- **Agent Sync Authentication**: Machine-to-machine endpoint `/api/agent/sync` requires the dedicated `AGENT_SYNC_TOKEN`. Standard web session auth is enforced on all internal dashboard routes.
+- **Work-Time Immutability**: Active work time is measured exclusively by the Windows Agent and upserted monotonically—it cannot be artificially decreased or manually forged.

@@ -13,10 +13,11 @@ import {
   RefreshCw,
   BarChart3,
   CalendarDays,
+  Loader2,
+  AlertCircle,
 } from "lucide-react";
 import type {
   GlobalAnalyticsResult,
-  MonthPerformanceSummary,
 } from "@/lib/services/analytics/globalAnalytics";
 
 export default function GlobalAnalyticsPage() {
@@ -24,10 +25,12 @@ export default function GlobalAnalyticsPage() {
   const [data, setData] = React.useState<GlobalAnalyticsResult | null>(null);
   const [loading, setLoading] = React.useState(true);
   const [refreshing, setRefreshing] = React.useState(false);
+  const [error, setError] = React.useState<string | null>(null);
 
   const fetchAnalytics = React.useCallback(async (r: string, isSilent = false) => {
     if (!isSilent) setLoading(true);
     else setRefreshing(true);
+    setError(null);
 
     try {
       const res = await fetch(`/api/analytics?range=${r}`);
@@ -35,10 +38,15 @@ export default function GlobalAnalyticsPage() {
         const json = await res.json();
         if (json.success && json.analytics) {
           setData(json.analytics);
+        } else {
+          setError(json.error || "Failed to load global analytics.");
         }
+      } else {
+        setError(`Analytics API returned ${res.status}`);
       }
     } catch (err) {
       console.error("Failed loading global analytics:", err);
+      setError("Network error while aggregating work time analytics.");
     } finally {
       setLoading(false);
       setRefreshing(false);
@@ -106,6 +114,9 @@ export default function GlobalAnalyticsPage() {
             >
               Previous Year
             </button>
+            {loading && data && (
+              <Loader2 size={13} className="animate-spin text-cyan-400 mx-1 shrink-0" />
+            )}
           </div>
 
           <button
@@ -120,10 +131,62 @@ export default function GlobalAnalyticsPage() {
       </div>
 
       {loading && !data ? (
-        <div className="flex items-center justify-center p-16 text-zinc-500 font-mono text-xs">
-          <div className="flex items-center gap-2">
-            <div className="w-2.5 h-2.5 rounded-full bg-cyan-400 animate-ping" />
-            <span>AGGREGATING_CANONICAL_WORK_TIME_DATA...</span>
+        <div className="space-y-8 animate-in fade-in duration-150">
+          {/* 4 Cards Skeleton */}
+          <div className="grid grid-cols-1 sm:grid-cols-2 lg:grid-cols-4 gap-4">
+            {Array.from({ length: 4 }).map((_, i) => (
+              <div
+                key={i}
+                className="rounded-2xl border border-zinc-800/80 bg-zinc-950/70 p-5 space-y-3"
+              >
+                <div className="h-3 w-24 bg-zinc-800/60 rounded animate-pulse" />
+                <div className="h-9 w-36 bg-zinc-800/40 rounded animate-pulse" />
+                <div className="h-2.5 w-28 bg-zinc-900 rounded animate-pulse pt-1 border-t border-zinc-900" />
+              </div>
+            ))}
+          </div>
+
+          {/* Secondary 2-Card Row Skeleton */}
+          <div className="grid grid-cols-1 lg:grid-cols-2 gap-4">
+            <div className="rounded-2xl border border-zinc-800/80 bg-zinc-950/70 p-6 space-y-4">
+              <div className="h-4 w-36 bg-zinc-800/60 rounded animate-pulse" />
+              <div className="h-8 w-24 bg-zinc-800/40 rounded animate-pulse" />
+              <div className="h-3 w-full bg-zinc-900 rounded-full animate-pulse" />
+            </div>
+            <div className="rounded-2xl border border-zinc-800/80 bg-zinc-950/70 p-6 space-y-4">
+              <div className="h-4 w-36 bg-zinc-800/60 rounded animate-pulse" />
+              <div className="h-8 w-28 bg-zinc-800/40 rounded animate-pulse" />
+              <div className="h-3 w-full bg-zinc-900 rounded-full animate-pulse" />
+            </div>
+          </div>
+
+          {/* Chart Skeleton */}
+          <div className="rounded-2xl border border-zinc-800/80 bg-zinc-950/70 p-6 space-y-4">
+            <div className="h-4 w-48 bg-zinc-800/60 rounded animate-pulse" />
+            <div className="h-48 w-full bg-zinc-900/40 rounded-xl animate-pulse flex items-end justify-between p-4 gap-2">
+              {Array.from({ length: 12 }).map((_, i) => (
+                <div
+                  key={i}
+                  className="w-full bg-zinc-800/30 rounded-t"
+                  style={{ height: `${20 + (i % 5) * 15}%` }}
+                />
+              ))}
+            </div>
+          </div>
+        </div>
+      ) : error && !data ? (
+        <div className="rounded-2xl border border-red-900/50 bg-red-950/20 p-12 text-center space-y-4 font-mono">
+          <div className="inline-flex items-center gap-2 text-red-400 text-xs">
+            <AlertCircle size={18} />
+            <span>{error}</span>
+          </div>
+          <div>
+            <button
+              onClick={() => fetchAnalytics(range)}
+              className="px-4 py-2 rounded-xl bg-zinc-900 border border-zinc-700 text-xs font-mono text-white hover:bg-zinc-800 transition-colors"
+            >
+              Retry Loading Analytics
+            </button>
           </div>
         </div>
       ) : !data || data.trackedDaysCount === 0 ? (
@@ -136,7 +199,7 @@ export default function GlobalAnalyticsPage() {
           </p>
         </div>
       ) : (
-        <div className="space-y-8">
+        <div className={`space-y-8 transition-opacity duration-150 ${loading ? "opacity-60 pointer-events-none" : "opacity-100"}`}>
           
           {/* 2. CORE GLOBAL METRICS ROW (Primary 4 Cards) */}
           <div className="grid grid-cols-1 sm:grid-cols-2 lg:grid-cols-4 gap-4">

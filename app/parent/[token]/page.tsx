@@ -14,6 +14,7 @@ import {
   ShieldAlert,
   CalendarDays,
   Flame,
+  Loader2,
 } from "lucide-react";
 import type { ParentPortalPayload } from "@/lib/services/parentPortal/portalData";
 
@@ -99,15 +100,54 @@ export default function ParentPortalPage() {
     fetchPortalData();
   };
 
-  // 1. Loading State
+  // 1. Loading State (Full Skeleton matching Parent Portal)
   if (loading && !data) {
     return (
-      <div className="min-h-screen bg-black flex flex-col items-center justify-center p-6 text-zinc-400 font-sans">
-        <div className="flex flex-col items-center gap-3">
-          <div className="h-6 w-6 border-2 border-cyan-400 border-t-transparent rounded-full animate-spin" />
-          <span className="text-xs uppercase tracking-widest font-mono text-zinc-500">
-            Loading Parent Portal...
-          </span>
+      <div className="min-h-screen bg-black text-zinc-100 font-sans">
+        <div className="max-w-5xl mx-auto px-4 sm:px-6 py-6 sm:py-10 space-y-8 animate-in fade-in duration-150">
+          {/* Header Skeleton */}
+          <header className="flex flex-col sm:flex-row sm:items-center justify-between gap-4 border-b border-zinc-800/80 pb-6">
+            <div className="space-y-2">
+              <div className="h-5 w-24 bg-zinc-800/60 rounded-full animate-pulse" />
+              <div className="h-7 w-64 bg-zinc-800/40 rounded animate-pulse" />
+              <div className="h-4 w-96 bg-zinc-900 rounded animate-pulse" />
+            </div>
+            <div className="h-9 w-40 bg-zinc-900 rounded-xl animate-pulse" />
+          </header>
+
+          {/* Top 3 Highlight Cards Skeleton */}
+          <section className="grid grid-cols-1 sm:grid-cols-3 gap-3.5">
+            {Array.from({ length: 3 }).map((_, i) => (
+              <div key={i} className="rounded-2xl border border-zinc-800 bg-zinc-950 p-5 space-y-3">
+                <div className="h-4 w-28 bg-zinc-800/60 rounded animate-pulse" />
+                <div className="h-8 w-20 bg-zinc-800/40 rounded animate-pulse" />
+                <div className="h-3 w-36 bg-zinc-900 rounded animate-pulse" />
+              </div>
+            ))}
+          </section>
+
+          {/* Calendar Grid Skeleton */}
+          <section className="space-y-3">
+            <div className="h-4 w-40 bg-zinc-800/60 rounded animate-pulse" />
+            <div className="rounded-2xl border border-zinc-800 bg-zinc-950 p-4 sm:p-5">
+              <div className="grid grid-cols-7 gap-2 mb-3">
+                {["Mon", "Tue", "Wed", "Thu", "Fri", "Sat", "Sun"].map((d) => (
+                  <div key={d} className="h-6 bg-zinc-900/60 rounded text-center text-xs font-mono text-zinc-600 flex items-center justify-center font-bold">
+                    {d}
+                  </div>
+                ))}
+              </div>
+              <div className="grid grid-cols-7 gap-2">
+                {Array.from({ length: 35 }).map((_, i) => (
+                  <div key={i} className="min-h-[100px] rounded-xl border border-zinc-900 bg-zinc-950/40 p-2.5 flex flex-col justify-between">
+                    <div className="h-3 w-6 bg-zinc-800/50 rounded animate-pulse" />
+                    <div className="h-3 w-12 bg-zinc-900 rounded animate-pulse my-auto" />
+                    <div className="h-2 w-14 bg-zinc-900/80 rounded animate-pulse" />
+                  </div>
+                ))}
+              </div>
+            </div>
+          </section>
         </div>
       </div>
     );
@@ -142,12 +182,23 @@ export default function ParentPortalPage() {
             <AlertTriangle size={24} />
           </div>
           <div className="space-y-1">
-            <h1 className="text-lg font-bold text-white tracking-tight">Invalid Access Link</h1>
+            <h1 className="text-lg font-bold text-white tracking-tight">
+              {errorStatus === "not_found" ? "Invalid Access Link" : "Failed to Load"}
+            </h1>
             <p className="text-sm text-zinc-400">{errorMessage || "This link could not be verified."}</p>
           </div>
-          <p className="text-xs text-zinc-600 font-mono pt-2">
-            Please make sure you have copied the entire shareable URL.
-          </p>
+          {errorStatus === "error" ? (
+            <button
+              onClick={() => fetchPortalData(currentYear, currentMonth)}
+              className="px-4 py-2 rounded-xl bg-zinc-900 border border-zinc-700 text-xs font-mono text-white hover:bg-zinc-800 transition-colors"
+            >
+              Retry Connection
+            </button>
+          ) : (
+            <p className="text-xs text-zinc-600 font-mono pt-2">
+              Please make sure you have copied the entire shareable URL.
+            </p>
+          )}
         </div>
       </div>
     );
@@ -158,7 +209,7 @@ export default function ParentPortalPage() {
 
   return (
     <div className="min-h-screen bg-black text-zinc-100 font-sans selection:bg-cyan-500/30 selection:text-cyan-200">
-      <div className="max-w-5xl mx-auto px-4 sm:px-6 py-6 sm:py-10 space-y-8">
+      <div className={`max-w-5xl mx-auto px-4 sm:px-6 py-6 sm:py-10 space-y-8 transition-opacity duration-150 ${loading ? "opacity-60 pointer-events-none" : "opacity-100"}`}>
         
         {/* HEADER */}
         <header className="flex flex-col sm:flex-row sm:items-center justify-between gap-4 border-b border-zinc-800/80 pb-6">
@@ -194,8 +245,9 @@ export default function ParentPortalPage() {
             >
               <ChevronLeft size={16} />
             </button>
-            <div className="px-3 py-1 font-mono text-xs font-bold text-white whitespace-nowrap">
-              {selectedMonth.monthName} {selectedMonth.year}
+            <div className="px-3 py-1 font-mono text-xs font-bold text-white whitespace-nowrap flex items-center gap-1.5">
+              <span>{selectedMonth.monthName} {selectedMonth.year}</span>
+              {loading && <Loader2 size={12} className="animate-spin text-cyan-400" />}
             </div>
             <button
               onClick={handleNextMonth}
