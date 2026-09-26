@@ -1,28 +1,9 @@
 import { NextResponse } from "next/server";
 import type { NextRequest } from "next/server";
-import { verifySessionToken, verifyAgentToken } from "./lib/auth";
+import { verifySessionToken } from "./lib/auth";
 
 export function proxy(req: NextRequest) {
   const { pathname } = req.nextUrl;
-
-  // Agent sync API authentication (Bearer token)
-  if (pathname.startsWith("/api/agent/")) {
-    const authHeader = req.headers.get("Authorization");
-    if (!authHeader || !authHeader.startsWith("Bearer ")) {
-      return NextResponse.json(
-        { error: "Unauthorized: Missing Bearer token for agent sync" },
-        { status: 401 }
-      );
-    }
-    const token = authHeader.slice(7);
-    if (!verifyAgentToken(token)) {
-      return NextResponse.json(
-        { error: "Unauthorized: Invalid agent sync token" },
-        { status: 401 }
-      );
-    }
-    return NextResponse.next();
-  }
 
   // CRON_SECRET validation for scheduled tasks
   if (pathname === "/api/settings/backup") {
@@ -46,12 +27,19 @@ export function proxy(req: NextRequest) {
     return NextResponse.next();
   }
 
+  // Explicitly exempt dedicated machine-to-machine Agent Sync endpoint from owner/session cookie auth.
+  // The route handler (/api/agent/sync/route.ts) authoritatively validates Authorization: Bearer <AGENT_SYNC_TOKEN>.
+  if (pathname === "/api/agent/sync") {
+    return NextResponse.next();
+  }
+
   // Safeguard: completely bypass auth checks for public routes, tokenized parent portal, static assets, and APIs
   if (
     pathname === "/login" ||
     pathname.startsWith("/api/auth/") ||
     pathname.startsWith("/parent") ||
     pathname.startsWith("/api/parent") ||
+    pathname === "/api/agent/sync" ||
     pathname.includes(".") ||
     pathname.startsWith("/_next/") ||
     pathname.startsWith("/icons/") ||
@@ -85,6 +73,6 @@ export function proxy(req: NextRequest) {
 
 export const config = {
   matcher: [
-    "/((?!login|api/auth|parent|api/parent|_next|icons|manifest\\.json|sw\\.js|favicon\\.ico|.*\\.).*)",
+    "/((?!login|api/auth|parent|api/parent|api/agent/sync|_next|icons|manifest\\.json|sw\\.js|favicon\\.ico|.*\\.).*)",
   ],
 };

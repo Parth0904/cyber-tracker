@@ -20,8 +20,9 @@ const isVercel = process.env.VERCEL === "1";
 const isProduction = process.env.NODE_ENV === "production";
 const usePostgres = !!env.databaseUrl || isVercel || isProduction;
 
-// connection pool for PostgreSQL
-let pgPool: pg.Pool | null = null;
+// connection pool for PostgreSQL (cached on globalThis to reuse connections across reloads)
+const globalForPg = globalThis as unknown as { _pgPool?: pg.Pool };
+let pgPool: pg.Pool | null = globalForPg._pgPool || null;
 
 if (usePostgres) {
   if (!env.databaseUrl) {
@@ -29,12 +30,18 @@ if (usePostgres) {
       "CRITICAL DATABASE ERROR: PostgreSQL is required in this environment (Vercel or production), but DATABASE_URL is not defined."
     );
   }
-  pgPool = new pg.Pool({
-    connectionString: env.databaseUrl,
-    ssl: {
-      rejectUnauthorized: false, // Required for secure serverless connections (Neon/Supabase)
-    },
-  });
+  if (!pgPool) {
+    pgPool = new pg.Pool({
+      connectionString: env.databaseUrl,
+      ssl: {
+        rejectUnauthorized: false, // Required for secure serverless connections (Neon/Supabase)
+      },
+      max: 10,
+      idleTimeoutMillis: 30000,
+      connectionTimeoutMillis: 5000,
+    });
+    globalForPg._pgPool = pgPool;
+  }
 }
 
 // Translate SQLite parameterized syntax (?) to PostgreSQL ($1, $2, etc.)

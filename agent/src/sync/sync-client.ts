@@ -54,6 +54,14 @@ export class AgentSyncService {
     }
 
     this.isSyncing = true;
+    const syncUrl = `${this.apiBaseUrl.replace(/\/$/, "")}/api/agent/sync`;
+    let targetHost = "localhost";
+    try {
+      targetHost = new URL(syncUrl).host;
+    } catch {
+      targetHost = this.apiBaseUrl;
+    }
+
     try {
       const unsynced: UnsyncedDailyTotal[] = this.repository.getUnsyncedDailyTotals();
       if (!unsynced || unsynced.length === 0) {
@@ -67,9 +75,8 @@ export class AgentSyncService {
         active_seconds: u.total_seconds,
       }));
 
-      const syncUrl = `${this.apiBaseUrl.replace(/\/$/, "")}/api/agent/sync`;
-
       logger.info("Agent sync started", {
+        targetHost,
         unsyncedCount: unsynced.length,
         url: syncUrl,
         records: records.map((r) => ({ date: r.date, active_seconds: r.active_seconds })),
@@ -95,15 +102,31 @@ export class AgentSyncService {
       }
 
       logger.info("Agent sync HTTP response received", {
+        targetHost,
         status: response.status,
         statusText: response.statusText,
       });
 
       if (!response.ok) {
         const errorText = await response.text().catch(() => response.statusText);
-        logger.warn("Sync endpoint returned non-200 status", {
+        const failureCategory =
+          response.status === 401
+            ? "AUTHENTICATION_FAILED"
+            : response.status === 403
+            ? "ACCESS_FORBIDDEN"
+            : response.status === 404
+            ? "ENDPOINT_NOT_FOUND"
+            : response.status >= 500
+            ? "SERVER_ERROR"
+            : "CLIENT_ERROR";
+
+        logger.warn(`Sync failed: HTTP ${response.status}`, {
+          targetHost,
           status: response.status,
-          error: errorText,
+          statusText: response.statusText,
+          response: errorText.slice(0, 200),
+          failureCategory,
+          retryResult: "Work preserved locally in SQLite; will retry on next sync interval",
         });
         this.repository.setState(
           "last_sync_status",
@@ -131,6 +154,7 @@ export class AgentSyncService {
       );
 
       logger.info("Agent sync successfully completed", {
+        targetHost,
         recordsCount: records.length,
         dates: records.map((r) => r.date),
         serverResult: result,
@@ -142,7 +166,10 @@ export class AgentSyncService {
       const errorMsg = isAbort ? "Request timed out after 5000ms" : String(err.message || err);
 
       logger.warn("Agent sync deferred (offline or server unreachable)", {
+        targetHost,
         error: errorMsg,
+        failureCategory: isAbort ? "NETWORK_TIMEOUT" : "NETWORK_OFFLINE",
+        retryResult: "Work preserved locally in SQLite; will retry on next sync interval",
       });
 
       this.repository.setState("last_sync_status", `DEFERRED: ${errorMsg.slice(0, 80)}`);
